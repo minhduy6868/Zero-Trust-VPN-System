@@ -636,7 +636,135 @@ Script sẽ test:
 
 **⏱ Thời gian:** 30 giây
 
-### 8.4. Manual Browser Test
+### 8.4. Test 3 Permission Levels 🔐
+
+#### Test Employee (john) - Limited Access
+
+```bash
+# 1. Get token for john
+TOKEN=$(curl -s -X POST 'http://localhost:8080/realms/zero-trust/protocol/openid-connect/token' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'client_id=zero-trust-client' \
+  -d 'username=john@company.com' \
+  -d 'password=password123' \
+  -d 'grant_type=password' | jq -r '.access_token')
+
+# 2. Try to access database (should FAIL)
+curl -X GET "http://localhost:5000/api/database/customer_db" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Expected: {"error": "Permission denied"}
+
+# 3. Try to access web-server-1 (should SUCCESS)
+curl -X GET "http://localhost:5000/api/server/web-server-1" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Expected: {"status": "allowed", "resource": "web-server-1"}
+```
+
+#### Test Financial Officer (alice) - Medium Access
+
+```bash
+# 1. Get token for alice
+TOKEN=$(curl -s -X POST 'http://localhost:8080/realms/zero-trust/protocol/openid-connect/token' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'client_id=zero-trust-client' \
+  -d 'username=alice@company.com' \
+  -d 'password=password123' \
+  -d 'grant_type=password' | jq -r '.access_token')
+
+# 2. Access customer_db READ (should SUCCESS)
+curl -X GET "http://localhost:5000/api/database/customer_db" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Expected: {"status": "allowed", "access": "read-only"}
+
+# 3. Try to WRITE to database (should FAIL)
+curl -X POST "http://localhost:5000/api/database/customer_db/write" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"query": "INSERT INTO users..."}'
+
+# Expected: {"error": "Write permission denied"}
+
+# 4. Access web-server-2 (should SUCCESS)
+curl -X GET "http://localhost:5000/api/server/web-server-2" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Expected: {"status": "allowed", "resource": "web-server-2"}
+```
+
+#### Test DBA/Admin (bob) - Full Access
+
+```bash
+# 1. Get token for bob
+TOKEN=$(curl -s -X POST 'http://localhost:8080/realms/zero-trust/protocol/openid-connect/token' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'client_id=zero-trust-client' \
+  -d 'username=bob@company.com' \
+  -d 'password=password123' \
+  -d 'grant_type=password' | jq -r '.access_token')
+
+# 2. Full database access (should SUCCESS)
+curl -X POST "http://localhost:5000/api/database/customer_db/write" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"query": "INSERT INTO users..."}'
+
+# Expected: {"status": "success", "access": "full"}
+
+# 3. Access all servers (should SUCCESS)
+curl -X GET "http://localhost:5000/api/server/production-db" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Expected: {"status": "allowed", "resource": "production-db"}
+
+# 4. Admin operations (should SUCCESS)
+curl -X GET "http://localhost:5000/api/admin/users" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Expected: {"users": [...], "admin": true}
+```
+
+#### Compare Vault Policies
+
+```bash
+# View employee policy (limited)
+export VAULT_ADDR='http://localhost:8200'
+export VAULT_TOKEN="myroot"
+
+vault policy read employee-policy
+
+# Output:
+# path "secret/data/wireguard/users/john" {
+#   capabilities = ["read"]
+# }
+# path "secret/data/resources/web-server-1" {
+#   capabilities = ["read"]
+# }
+
+# View financial policy (medium)
+vault policy read financial-policy
+
+# Output:
+# path "secret/data/wireguard/users/alice" {
+#   capabilities = ["read"]
+# }
+# path "secret/data/database/customer_db" {
+#   capabilities = ["read"]
+# }
+# path "secret/data/resources/*" {
+#   capabilities = ["read"]
+# }
+
+# View DBA policy (full)
+vault policy read dba-policy
+
+# Output:
+# path "secret/*" {
+#   capabilities = ["create", "read", "update", "delete", "list"]
+# }
+```
+
+### 8.5. Manual Browser Test
 
 1. **Mở trình duyệt:** `http://localhost:3000`
 

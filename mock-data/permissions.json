@@ -1,49 +1,187 @@
 {
   "roles": {
     "employee": {
-      "databases": ["customer_db"],
-      "servers": ["web-server-1"],
-      "apis": ["customer-api"],
-      "vpn_access": true,
-      "ssh_access": false,
-      "admin_panel": false
+      "display_name": "Employee",
+      "level": "limited",
+      "vpn_access": "basic",
+      "databases": {
+        "allowed": [],
+        "read_only": []
+      },
+      "servers": {
+        "allowed": ["web-server-1"]
+      },
+      "apis": {
+        "allowed": ["customer-api"]
+      },
+      "features": {
+        "ssh_access": false,
+        "database_write": false,
+        "admin_panel": false,
+        "user_management": false,
+        "view_logs": false,
+        "modify_policies": false
+      },
+      "description": "Basic access for regular employees"
     },
     "financial_officer": {
-      "databases": ["customer_db", "finance_db"],
-      "servers": ["web-server-1", "web-server-2", "finance-server"],
-      "apis": ["customer-api", "finance-api"],
-      "vpn_access": true,
-      "ssh_access": true,
-      "admin_panel": false
+      "display_name": "Financial Officer",
+      "level": "medium",
+      "vpn_access": "full",
+      "databases": {
+        "allowed": ["customer_db", "finance_db"],
+        "read_only": ["customer_db"]
+      },
+      "servers": {
+        "allowed": ["web-server-1", "web-server-2", "finance-server"]
+      },
+      "apis": {
+        "allowed": ["customer-api", "finance-api", "reports-api"]
+      },
+      "features": {
+        "ssh_access": true,
+        "database_write": false,
+        "admin_panel": false,
+        "user_management": false,
+        "view_logs": true,
+        "modify_policies": false
+      },
+      "description": "Access to financial data and reports"
     },
     "dba_admin": {
-      "databases": ["customer_db", "finance_db", "hr_db", "analytics_db"],
-      "servers": ["*"],
-      "apis": ["*"],
-      "vpn_access": true,
-      "ssh_access": true,
-      "admin_panel": true
+      "display_name": "DBA/Administrator",
+      "level": "full",
+      "vpn_access": "priority",
+      "databases": {
+        "allowed": ["*"],
+        "read_only": []
+      },
+      "servers": {
+        "allowed": ["*"]
+      },
+      "apis": {
+        "allowed": ["*"]
+      },
+      "features": {
+        "ssh_access": true,
+        "database_write": true,
+        "admin_panel": true,
+        "user_management": true,
+        "view_logs": true,
+        "modify_policies": true
+      },
+      "description": "Full system access with all privileges"
     }
   },
   "resources": {
     "databases": [
-      "customer_db",
-      "finance_db",
-      "hr_db",
-      "analytics_db"
+      {
+        "id": "customer_db",
+        "name": "Customer Database",
+        "description": "Customer records and profiles",
+        "status": "active",
+        "icon": "database"
+      },
+      {
+        "id": "finance_db",
+        "name": "Finance Database",
+        "description": "Financial transactions and reports",
+        "status": "active",
+        "icon": "dollar"
+      },
+      {
+        "id": "hr_db",
+        "name": "HR Database",
+        "description": "Employee records and payroll",
+        "status": "active",
+        "icon": "users"
+      },
+      {
+        "id": "analytics_db",
+        "name": "Analytics Database",
+        "description": "Business intelligence and metrics",
+        "status": "active",
+        "icon": "chart"
+      }
     ],
     "servers": [
-      "web-server-1",
-      "web-server-2",
-      "finance-server",
-      "db-server-1",
-      "db-server-2"
+      {
+        "id": "web-server-1",
+        "name": "Web Server 1",
+        "description": "Public website frontend",
+        "ip": "10.0.0.20",
+        "status": "active",
+        "icon": "server"
+      },
+      {
+        "id": "web-server-2",
+        "name": "Web Server 2",
+        "description": "Internal web applications",
+        "ip": "10.0.0.21",
+        "status": "active",
+        "icon": "server"
+      },
+      {
+        "id": "finance-server",
+        "name": "Finance Server",
+        "description": "Financial reporting system",
+        "ip": "10.0.0.25",
+        "status": "active",
+        "icon": "calculator"
+      },
+      {
+        "id": "db-server-1",
+        "name": "Database Server 1",
+        "description": "Primary database server",
+        "ip": "10.0.0.10",
+        "status": "active",
+        "icon": "database"
+      },
+      {
+        "id": "db-server-2",
+        "name": "Database Server 2",
+        "description": "Backup database server",
+        "ip": "10.0.0.11",
+        "status": "active",
+        "icon": "database"
+      }
     ],
     "apis": [
-      "customer-api",
-      "finance-api",
-      "hr-api",
-      "analytics-api"
+      {
+        "id": "customer-api",
+        "name": "Customer API",
+        "endpoint": "/api/v1/customers",
+        "description": "Customer data operations"
+      },
+      {
+        "id": "finance-api",
+        "name": "Finance API",
+        "endpoint": "/api/v1/finance",
+        "description": "Financial data operations"
+      },
+      {
+        "id": "hr-api",
+        "name": "HR API",
+        "endpoint": "/api/v1/hr",
+        "description": "HR data operations"
+      },
+      {
+        "id": "analytics-api",
+        "name": "Analytics API",
+        "endpoint": "/api/v1/analytics",
+        "description": "Analytics and reporting"
+      },
+      {
+        "id": "reports-api",
+        "name": "Reports API",
+        "endpoint": "/api/v1/reports",
+        "description": "Generate and view reports"
+      }
     ]
+  },
+  "user_role_mapping": {
+    "john@company.com": "employee",
+    "alice@company.com": "financial_officer",
+    "bob@company.com": "dba_admin"
   }
 }

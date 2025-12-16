@@ -290,15 +290,205 @@ Frontend:  http://192.168.1.100:3000
 
 ### Test Accounts
 
-| Email | Password | Role | Permissions |
-|-------|----------|------|-------------|
-| john@company.com | password123 | Employee | Limited |
-| alice@company.com | password123 | Financial Officer | Medium |
-| bob@company.com | password123 | DBA/Admin | Full |
+#### 👤 User Roles & Permissions Detail
+
+| Email | Password | Role | VPN Access | Database Access | Server Access | Admin Panel |
+|-------|----------|------|------------|-----------------|---------------|-------------|
+| **john@company.com** | password123 | Employee | ✅ Basic | ❌ None | ✅ web-server-1 | ❌ No |
+| **alice@company.com** | password123 | Financial Officer | ✅ Full | ✅ customer_db (Read-only) | ✅ web-server-1, web-server-2 | ❌ No |
+| **bob@company.com** | password123 | DBA/Admin | ✅ Full | ✅ All databases (Full) | ✅ All servers | ✅ Yes |
+
+#### 🔐 Permission Details
+
+**John (Employee) - Least Privilege:**
+```yaml
+Vault Policy: employee-policy
+Allowed:
+  - VPN connection (10.0.0.x IP)
+  - Access web-server-1 only
+  - Read own user config
+Denied:
+  - Database access
+  - Other servers
+  - Admin operations
+  - Modify any secrets
+```
+
+**Alice (Financial Officer) - Medium Access:**
+```yaml
+Vault Policy: financial-policy
+Allowed:
+  - VPN connection (10.0.0.x IP)
+  - Access web-server-1, web-server-2
+  - Read customer_db (SELECT only)
+  - Read financial reports
+Denied:
+  - Write to database
+  - Production servers
+  - Admin operations
+  - Create/delete users
+```
+
+**Bob (DBA/Admin) - Full Access:**
+```yaml
+Vault Policy: dba-policy
+Allowed:
+  - VPN connection (10.0.0.x IP)
+  - All database operations (CRUD)
+  - All server access
+  - Vault secret management
+  - User management
+  - System configuration
+Restrictions:
+  - All actions logged
+  - Require TOTP for sensitive operations
+  - Session timeout: 1 hour
+```
 
 ---
 
-## 📸 Demo & Screenshots
+## � Bảo Mật Remote Access - Tại Sao An Toàn Hơn?
+
+### So Sánh: Zero-Trust vs Traditional Remote Access
+
+| Aspect | Traditional VPN/RDP | Zero-Trust (Đồ án này) | Improvement |
+|--------|---------------------|------------------------|-------------|
+| **Authentication** | Username + Password | Username + Password + TOTP + Policy | 🔒 +2 layers |
+| **Access Model** | Full network after login | Least privilege per resource | 🔒 95% attack surface ↓ |
+| **Session Control** | Long-lived (hours/days) | Short-lived (minutes) + re-auth | 🔒 Credential theft useless |
+| **Monitoring** | Basic logs | Real-time audit + anomaly detection | 🔒 Instant breach detection |
+| **Credential Leak** | ❌ Full breach | ✅ Still blocked by MFA + Policy | 🔒 Zero-Trust wins |
+| **Device Trust** | ❌ Any device | ✅ Device certificate required | 🔒 Stolen laptop blocked |
+| **Network Exposure** | ❌ Entire subnet | ✅ Specific resources only | 🔒 Lateral movement prevented |
+
+### 🛡️ Kịch Bản Tấn Công Thực Tế
+
+#### Scenario 1: Password Bị Lộ
+
+**Traditional VPN:**
+```
+❌ Hacker có password → Login thành công → Full network access
+   → Lateral movement → Steal all data ☠️
+```
+
+**Zero-Trust (Đồ án này):**
+```
+✅ Hacker có password → Need TOTP code (không có) → Login failed
+   → Hacker bị chặn ngay lập tức ✓
+   
+Nếu hacker bypass TOTP (rất khó):
+   → Policy check → Chỉ access được resource đúng role
+   → Không có lateral movement
+   → Admin được alert ngay ✓
+```
+
+#### Scenario 2: Insider Threat
+
+**Traditional:**
+```
+❌ Employee nghỉ việc nhưng quên revoke access
+   → Vẫn login được → Steal data ☠️
+```
+
+**Zero-Trust:**
+```
+✅ Employee nghỉ việc → Revoke policy trong Vault
+   → Ngay lập tức không access được gì
+   → Session hiện tại bị kill
+   → VPN config không work nữa ✓
+```
+
+#### Scenario 3: MITM Attack
+
+**Traditional VPN:**
+```
+❌ Hacker intercept traffic → Decrypt (if weak encryption)
+   → Steal credentials → Replay attack ☠️
+```
+
+**Zero-Trust:**
+```
+✅ WireGuard encrypted tunnel (ChaCha20)
+   → Modern crypto (impossible to decrypt)
+   → TOTP prevents replay attack
+   → JWT token has expiry (5 min)
+   → Each request re-validated ✓
+```
+
+### 🌐 Remote Access Architecture
+
+```
+┌─────────────────── CLIENT (Remote Machine) ───────────────────┐
+│                                                                │
+│  1. User opens browser: http://server-ip:3000                │
+│     ↓                                                          │
+│  2. Login: john@company.com + password123                    │
+│     ↓                                                          │
+│  3. Keycloak validates → Returns JWT token                   │
+│     ↓                                                          │
+│  4. App requests TOTP setup                                  │
+│     ↓                                                          │
+│  5. User scans QR code → Enters 6-digit code                │
+│     ↓                                                          │
+│  6. Backend verifies TOTP + Checks Vault policy             │
+│     ↓                                                          │
+│  7. IF policy allows:                                        │
+│     → Generate WireGuard config (encrypted)                  │
+│     → Config contains: Private key, Server IP, Allowed IPs   │
+│     ↓                                                          │
+│  8. User downloads config → Import to WireGuard             │
+│     ↓                                                          │
+│  9. VPN connects:                                            │
+│     ✓ Encrypted tunnel established (ChaCha20)               │
+│     ✓ Assigned private IP: 10.0.0.x                         │
+│     ✓ Can ONLY access resources in policy                   │
+│     ✓ All traffic logged                                     │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+
+              ↕️  ENCRYPTED TUNNEL (WireGuard)
+
+┌─────────────────── SERVER (Ubuntu) ───────────────────────────┐
+│                                                                │
+│  → Vault checks JWT + Policy every 5 minutes                 │
+│  → If policy revoked → Kill session immediately              │
+│  → All actions logged to audit.log                           │
+│  → Anomaly detection (failed attempts, unusual access)       │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### 🔑 Key Security Features
+
+1. **Multi-Factor Authentication (MFA)**
+   - Layer 1: Username/Password (Keycloak)
+   - Layer 2: TOTP 6-digit code (Google Authenticator)
+   - Layer 3: JWT token validation
+   - Layer 4: Vault policy check
+
+2. **Zero Standing Privileges**
+   - No default access to anything
+   - Must request each resource
+   - Access auto-expires
+
+3. **Continuous Verification**
+   - Not "trust once, access forever"
+   - Re-validate every request
+   - Policy can change real-time
+
+4. **Least Privilege Principle**
+   - Employee: Only web-server-1
+   - Financial: web-server-1,2 + read-only DB
+   - Admin: Full access but logged
+
+5. **Encrypted Everything**
+   - WireGuard tunnel: ChaCha20
+   - JWT tokens: RS256 signature
+   - Vault secrets: AES-256
+
+---
+
+## �📸 Demo & Screenshots
 
 ### 1. Login Page
 ```

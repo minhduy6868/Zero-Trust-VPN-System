@@ -395,34 +395,157 @@ def get_profile():
         return jsonify({"error": "Failed to get profile"}), 500
 
 
+# ==================== USER PROFILE & PERMISSIONS ====================
+
+@app.route('/api/user/profile', methods=['GET'])
+@require_auth
+def get_profile():
+    """Get user profile"""
+    try:
+        username = request.user_info.get('preferred_username', request.user_info.get('email'))
+        
+        # Load permissions data
+        with open('/app/mock-data/permissions.json', 'r') as f:
+            permissions_data = json.load(f)
+        
+        # Get user's role
+        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        role_info = permissions_data['roles'].get(user_role, {})
+        
+        return jsonify({
+            "username": username,
+            "email": request.user_info.get('email', username),
+            "name": request.user_info.get('name', username.split('@')[0].title()),
+            "role": user_role,
+            "role_display": role_info.get('display_name', 'Employee'),
+            "level": role_info.get('level', 'limited')
+        })
+        
+    except Exception as e:
+        logger.error(f"Profile error: {e}")
+        return jsonify({"error": "Failed to get profile"}), 500
+
+
 @app.route('/api/user/permissions', methods=['GET'])
 @require_auth
 def get_permissions():
-    """Get user permissions from Vault"""
+    """Get user permissions from mock data"""
     try:
-        username = request.user_info.get('preferred_username', request.user_info.get('sub'))
+        username = request.user_info.get('preferred_username', request.user_info.get('email'))
         
-        # Get permissions from Vault
-        try:
-            secret = vault_client.secrets.kv.v2.read_secret_version(path=f"permissions/{username}")
-            permissions = secret['data']['data']
-            
-            return jsonify({
-                "databases": json.loads(permissions.get('databases', '[]')),
-                "servers": json.loads(permissions.get('servers', '[]')),
-                "apis": json.loads(permissions.get('apis', '[]'))
-            })
-        except:
-            # Default permissions if not found
-            return jsonify({
-                "databases": [],
-                "servers": [],
-                "apis": []
-            })
+        # Load permissions data
+        with open('/app/mock-data/permissions.json', 'r') as f:
+            permissions_data = json.load(f)
+        
+        # Get user's role
+        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        role_permissions = permissions_data['roles'].get(user_role, {})
+        all_resources = permissions_data['resources']
+        
+        # Build response with detailed permissions
+        databases_allowed = role_permissions.get('databases', {}).get('allowed', [])
+        databases_readonly = role_permissions.get('databases', {}).get('read_only', [])
+        servers_allowed = role_permissions.get('servers', {}).get('allowed', [])
+        
+        # Filter resources based on permissions
+        accessible_databases = []
+        for db in all_resources['databases']:
+            if '*' in databases_allowed or db['id'] in databases_allowed:
+                db_copy = db.copy()
+                db_copy['access'] = 'read-only' if db['id'] in databases_readonly else 'full'
+                db_copy['status'] = 'allowed'
+                accessible_databases.append(db_copy)
+            else:
+                db_copy = db.copy()
+                db_copy['access'] = 'none'
+                db_copy['status'] = 'denied'
+                accessible_databases.append(db_copy)
+        
+        accessible_servers = []
+        for server in all_resources['servers']:
+            if '*' in servers_allowed or server['id'] in servers_allowed:
+                server_copy = server.copy()
+                server_copy['status'] = 'allowed'
+                accessible_servers.append(server_copy)
+            else:
+                server_copy = server.copy()
+                server_copy['status'] = 'denied'
+                accessible_servers.append(server_copy)
+        
+        return jsonify({
+            "role": user_role,
+            "role_display": role_permissions.get('display_name', 'Employee'),
+            "level": role_permissions.get('level', 'limited'),
+            "vpn_access": role_permissions.get('vpn_access', 'basic'),
+            "features": role_permissions.get('features', {}),
+            "databases": accessible_databases,
+            "servers": accessible_servers,
+            "description": role_permissions.get('description', '')
+        })
         
     except Exception as e:
         logger.error(f"Permissions error: {e}")
         return jsonify({"error": "Failed to get permissions"}), 500
+
+
+@app.route('/api/resources/check', methods=['POST'])
+@require_auth
+def check_resource_access():
+    """Check if user can access a specific resource"""
+    try:
+        data = request.json
+        resource_type = data.get('type')  # 'database', 'server', 'api'
+        resource_id = data.get('id')
+        action = data.get('action', 'read')  # 'read', 'write', 'connect'
+        
+        username = request.user_info.get('preferred_username', request.user_info.get('email'))
+        
+        # Load permissions
+        with open('/app/mock-data/permissions.json', 'r') as f:
+            permissions_data = json.load(f)
+        
+        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        role_permissions = permissions_data['roles'].get(user_role, {})
+        
+        # Check access
+        allowed = False
+        details = {}
+        
+        if resource_type == 'database':
+            databases_allowed = role_permissions.get('databases', {}).get('allowed', [])
+            databases_readonly = role_permissions.get('databases', {}).get('read_only', [])
+            
+            if '*' in databases_allowed or resource_id in databases_allowed:
+                if action == 'write':
+                    allowed = resource_id not in databases_readonly and role_permissions['features'].get('database_write', False)
+                    details['reason'] = 'read-only access' if resource_id in databases_readonly else 'write allowed'
+                else:
+                    allowed = True
+                    details['access_type'] = 'read-only' if resource_id in databases_readonly else 'full'
+            else:
+                details['reason'] = 'resource not in permitted list'
+        
+        elif resource_type == 'server':
+            servers_allowed = role_permissions.get('servers', {}).get('allowed', [])
+            if '*' in servers_allowed or resource_id in servers_allowed:
+                allowed = True
+                details['ssh_enabled'] = role_permissions['features'].get('ssh_access', False)
+            else:
+                details['reason'] = 'server access denied'
+        
+        log_access(username, f"check_{resource_type}:{resource_id}:{action}", "allowed" if allowed else "denied")
+        
+        return jsonify({
+            "allowed": allowed,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "action": action,
+            "details": details
+        })
+        
+    except Exception as e:
+        logger.error(f"Resource check error: {e}")
+        return jsonify({"error": "Failed to check resource access"}), 500
 
 
 # ==================== ADMIN ENDPOINTS ====================
