@@ -1,0 +1,49 @@
+{
+  "roles": {
+    "employee": {
+      "databases": ["customer_db"],
+      "servers": ["web-server-1"],
+      "apis": ["customer-api"],
+      "vpn_access": true,
+      "ssh_access": false,
+      "admin_panel": false
+    },
+    "financial_officer": {
+      "databases": ["customer_db", "finance_db"],
+      "servers": ["web-server-1", "web-server-2", "finance-server"],
+      "apis": ["customer-api", "finance-api"],
+      "vpn_access": true,
+      "ssh_access": true,
+      "admin_panel": false
+    },
+    "dba_admin": {
+      "databases": ["customer_db", "finance_db", "hr_db", "analytics_db"],
+      "servers": ["*"],
+      "apis": ["*"],
+      "vpn_access": true,
+      "ssh_access": true,
+      "admin_panel": true
+    }
+  },
+  "resources": {
+    "databases": [
+      "customer_db",
+      "finance_db",
+      "hr_db",
+      "analytics_db"
+    ],
+    "servers": [
+      "web-server-1",
+      "web-server-2",
+      "finance-server",
+      "db-server-1",
+      "db-server-2"
+    ],
+    "apis": [
+      "customer-api",
+      "finance-api",
+      "hr-api",
+      "analytics-api"
+    ]
+  }
+}

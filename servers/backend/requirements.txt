@@ -1,0 +1,14 @@
+Flask==3.0.0
+python-dotenv==1.0.0
+requests==2.31.0
+PyJWT==2.8.0
+cryptography==41.0.7
+pyotp==2.9.0
+qrcode[pil]==7.4.2
+redis==5.0.1
+psycopg2-binary==2.9.9
+hvac==2.1.0
+python-jose[cryptography]==3.3.0
+Werkzeug==3.0.1
+flask-cors==4.0.0
+gunicorn==21.2.0

@@ -1,0 +1,34 @@
+{
+  "users": [
+    {
+      "username": "john",
+      "email": "john@company.com",
+      "password": "password123",
+      "name": "John Doe",
+      "role": "employee",
+      "department": "Engineering",
+      "ip_address": "10.0.0.100",
+      "totp_enabled": true
+    },
+    {
+      "username": "alice",
+      "email": "alice@company.com",
+      "password": "password123",
+      "name": "Alice Smith",
+      "role": "financial_officer",
+      "department": "Finance",
+      "ip_address": "10.0.0.101",
+      "totp_enabled": true
+    },
+    {
+      "username": "bob",
+      "email": "bob@company.com",
+      "password": "password123",
+      "name": "Bob Johnson",
+      "role": "dba_admin",
+      "department": "IT Operations",
+      "ip_address": "10.0.0.102",
+      "totp_enabled": true
+    }
+  ]
+}
