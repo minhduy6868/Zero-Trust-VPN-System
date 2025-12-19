@@ -1,6 +1,6 @@
 #!/bin/bash
 ###############################################################################
-# DEMO SSH - TEST VPN CONFIG
+# DEMO SSH - TEST VPN CONFIG WITH ROUTING CHECK
 ###############################################################################
 
 set -e
@@ -28,10 +28,7 @@ fi
 if [ -z "$1" ]; then
     echo -e "${YELLOW}📁 Nhập đường dẫn file VPN config:${NC}"
     read -e -p "   → " CONFIG
-    
-    # Expand tilde if present
     CONFIG="${CONFIG/#\~/$HOME}"
-    
     if [ -z "$CONFIG" ]; then
         echo -e "${RED}❌ Bạn chưa nhập đường dẫn${NC}"
         exit 1
@@ -40,11 +37,8 @@ else
     CONFIG="$1"
 fi
 
-# Validate file exists
 if [ ! -f "$CONFIG" ]; then
     echo -e "${RED}❌ File không tồn tại: $CONFIG${NC}"
-    echo ""
-    echo "Gợi ý: Kiểm tra đường dẫn hoặc dùng tab để autocomplete"
     exit 1
 fi
 
@@ -59,200 +53,158 @@ echo ""
 # Extract info
 ALLOWED=$(grep "^AllowedIPs" "$CONFIG" | cut -d'=' -f2 | xargs)
 ROLE=$(grep "# Role:" "$CONFIG" | cut -d':' -f2 | xargs)
-ACCESS=$(grep "# Access Level:" "$CONFIG" | cut -d':' -f2 | xargs)
 USERNAME=$(grep "# User:" "$CONFIG" | cut -d':' -f2 | xargs)
 
-# Auto-detect role from AllowedIPs if not in comments
 if [ -z "$ROLE" ]; then
     if [[ "$ALLOWED" == *"10.0.0.0/8"* ]]; then
         ROLE="GIAM_DOC (Giám Đốc)"
-        ACCESS="Full Network Access"
     elif [[ "$ALLOWED" == *"10.0.0.0/16"* ]]; then
         ROLE="QUAN_LY (Quản Lý)"
-        ACCESS="Manager Level Access"
     elif [[ "$ALLOWED" == *"10.0.0.0/24"* ]]; then
         ROLE="NHAN_VIEN (Nhân Viên)"
-        ACCESS="Basic Access"
-    else
-        ROLE="UNKNOWN"
-        ACCESS="Custom"
     fi
 fi
 
 echo -e "${GREEN}📊 THÔNG TIN VPN:${NC}"
-echo "  File:         $(basename "$CONFIG")"
-[ -n "$USERNAME" ] && echo "  User:         $USERNAME"
-echo "  Role:         $ROLE"
-echo "  Access Level: $ACCESS"
-echo "  AllowedIPs:   $ALLOWED"
+echo "  File:       $(basename "$CONFIG")"
+[ -n "$USERNAME" ] && echo "  User:       $USERNAME"
+echo "  Role:       $ROLE"
+echo "  AllowedIPs: $ALLOWED"
 echo ""
 
-read -p "Press Enter để tạo test servers và kết nối VPN..."
+read -p "Press Enter để kết nối VPN và test routing..."
 
-# Stop old VPN
+# Clean up
 wg-quick down wg0 2>/dev/null || true
-
-echo ""
-echo -e "${BLUE}🌐 Tạo Docker networks...${NC}"
-docker network rm zt-test-basic zt-test-manager zt-test-admin 2>/dev/null || true
-docker network create --subnet=10.0.0.0/24 zt-test-basic
-docker network create --subnet=10.1.0.0/24 zt-test-manager  
-docker network create --subnet=172.16.0.0/24 zt-test-admin
-
-echo -e "${BLUE}🖥️  Tạo 3 SSH servers...${NC}"
 docker rm -f ssh-basic ssh-manager ssh-admin 2>/dev/null || true
+docker network rm zt-test-basic zt-test-manager zt-test-admin 2>/dev/null || true
 
-# Basic Server (10.0.0.50)
-docker run -d --name ssh-basic \
-    --network zt-test-basic \
-    --ip 10.0.0.50 \
-    -e PUID=1000 -e PGID=1000 \
-    -e TZ=Asia/Ho_Chi_Minh \
-    -e PASSWORD_ACCESS=true \
-    -e USER_PASSWORD=password123 \
-    -e USER_NAME=testuser \
-    lscr.io/linuxserver/openssh-server:latest >/dev/null 2>&1
-
-# Manager Server (10.1.0.50)
-docker run -d --name ssh-manager \
-    --network zt-test-manager \
-    --ip 10.1.0.50 \
-    -e PUID=1000 -e PGID=1000 \
-    -e TZ=Asia/Ho_Chi_Minh \
-    -e PASSWORD_ACCESS=true \
-    -e USER_PASSWORD=password123 \
-    -e USER_NAME=testuser \
-    lscr.io/linuxserver/openssh-server:latest >/dev/null 2>&1
-
-# Admin Server (172.16.0.50)
-docker run -d --name ssh-admin \
-    --network zt-test-admin \
-    --ip 172.16.0.50 \
-    -e PUID=1000 -e PGID=1000 \
-    -e TZ=Asia/Ho_Chi_Minh \
-    -e PASSWORD_ACCESS=true \
-    -e USER_PASSWORD=password123 \
-    -e USER_NAME=testuser \
-    lscr.io/linuxserver/openssh-server:latest >/dev/null 2>&1
-
-echo -e "${GREEN}✅ Servers đã tạo${NC}"
+# Connect VPN FIRST
 echo ""
-echo "📊 SSH SERVERS:"
-echo "  • 10.0.0.50   - Basic Server (port 2222)"
-echo "  • 10.1.0.50   - Manager Server (port 2222)"
-echo "  • 172.16.0.50 - Admin Server (port 2222)"
-echo ""
-echo "Đang đợi servers khởi động (10s)..."
-sleep 10
-
-# Connect VPN
-echo ""
-echo -e "${BLUE}🔄 Kết nối VPN...${NC}"
+echo -e "${BLUE}🔄 Bước 1: Kết nối VPN...${NC}"
 cp "$CONFIG" /etc/wireguard/wg0.conf
 chmod 600 /etc/wireguard/wg0.conf
 
-echo "Debug: Checking config file..."
-wg show
-echo ""
-
-if wg-quick up wg0 2>&1 | tee /tmp/wg-output.log; then
+if wg-quick up wg0 2>&1 | tail -5; then
+    sleep 2
     echo -e "${GREEN}✅ VPN Connected!${NC}"
     echo ""
     
     # Show VPN interface
     echo -e "${BLUE}📊 VPN Interface:${NC}"
-    wg show | grep -E "interface|endpoint|allowed ips" | head -6
+    wg show wg0 2>/dev/null | head -10
     echo ""
     
-    # Show routes
-    echo -e "${BLUE}📊 Routes qua VPN:${NC}"
-    ip route | grep -E "10\.|172\.16\.|192\.168\." | head -10
+    # Show VPN routes
+    echo -e "${BLUE}📊 VPN Routes (chỉ routes qua wg0):${NC}"
+    ip route show dev wg0 2>/dev/null
     echo ""
     
-    read -p "Press Enter để test SSH access..."
+    # Test routing logic
+    echo -e "${BLUE}🔄 Bước 2: Test Routing Logic...${NC}"
     echo ""
     
-    # Test SSH
-    echo -e "${BLUE}🧪 TEST SSH ACCESS${NC}"
+    echo -e "${BLUE}🧪 KIỂM TRA ROUTING TABLE${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo -e "Role: ${GREEN}$ROLE${NC}"
     echo -e "AllowedIPs: ${YELLOW}$ALLOWED${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    # Test 1: Basic Server
-    echo -n "1️⃣  Ping 10.0.0.50 (Basic Server): "
-    if ping -c 2 -W 2 10.0.0.50 > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ OK${NC}"
-        echo -n "    SSH Port 2222: "
-        if timeout 3 nc -zv 10.0.0.50 2222 2>&1 | grep -q "succeeded\|open\|Connected"; then
-            echo -e "${GREEN}✅ CÓ THỂ KẾT NỐI${NC}"
-        else
-            echo -e "${YELLOW}⚠️  Port chưa mở (server đang khởi động?)${NC}"
-        fi
+    # Test 1: Check if 10.0.0.50 route exists
+    echo -n "1️⃣  Route đến 10.0.0.50 (Basic Server): "
+    if ip route get 10.0.0.50 2>/dev/null | grep -q "dev wg0"; then
+        echo -e "${GREEN}✅ QUA VPN (wg0) - ALLOWED${NC}"
+        TEST1="ALLOWED"
     else
-        echo -e "${RED}❌ KHÔNG PING ĐƯỢC${NC}"
+        echo -e "${RED}❌ KHÔNG QUA VPN - BLOCKED${NC}"
+        TEST1="BLOCKED"
     fi
-    echo ""
     
-    # Test 2: Manager Server
-    echo -n "2️⃣  Ping 10.1.0.50 (Manager Server): "
-    if ping -c 2 -W 2 10.1.0.50 > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ OK${NC}"
-        echo -n "    SSH Port 2222: "
-        if timeout 3 nc -zv 10.1.0.50 2222 2>&1 | grep -q "succeeded\|open\|Connected"; then
-            echo -e "${GREEN}✅ CÓ THỂ KẾT NỐI${NC}"
-        else
-            echo -e "${YELLOW}⚠️  Port chưa mở (server đang khởi động?)${NC}"
-        fi
+    # Test 2: Check if 10.1.0.50 route exists
+    echo -n "2️⃣  Route đến 10.1.0.50 (Manager Server): "
+    if ip route get 10.1.0.50 2>/dev/null | grep -q "dev wg0"; then
+        echo -e "${GREEN}✅ QUA VPN (wg0) - ALLOWED${NC}"
+        TEST2="ALLOWED"
     else
-        echo -e "${RED}❌ KHÔNG PING ĐƯỢC${NC}"
+        echo -e "${RED}❌ KHÔNG QUA VPN - BLOCKED${NC}"
+        TEST2="BLOCKED"
     fi
-    echo ""
     
-    # Test 3: Admin Server
-    echo -n "3️⃣  Ping 172.16.0.50 (Admin Server): "
-    if ping -c 2 -W 2 172.16.0.50 > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ OK${NC}"
-        echo -n "    SSH Port 2222: "
-        if timeout 3 nc -zv 172.16.0.50 2222 2>&1 | grep -q "succeeded\|open\|Connected"; then
-            echo -e "${GREEN}✅ CÓ THỂ KẾT NỐI${NC}"
-        else
-            echo -e "${YELLOW}⚠️  Port chưa mở (server đang khởi động?)${NC}"
-        fi
+    # Test 3: Check if 172.16.0.50 route exists
+    echo -n "3️⃣  Route đến 172.16.0.50 (Admin Server): "
+    if ip route get 172.16.0.50 2>/dev/null | grep -q "dev wg0"; then
+        echo -e "${GREEN}✅ QUA VPN (wg0) - ALLOWED${NC}"
+        TEST3="ALLOWED"
     else
-        echo -e "${RED}❌ KHÔNG PING ĐƯỢC${NC}"
+        echo -e "${RED}❌ KHÔNG QUA VPN - BLOCKED${NC}"
+        TEST3="BLOCKED"
     fi
     echo ""
     
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${GREEN}📊 KẾT LUẬN CHO ROLE: $ROLE${NC}"
+    echo -e "${GREEN}📊 KẾT QUẢ VÀ PHÂN TÍCH${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    # Analyze based on AllowedIPs
+    # Analyze based on actual test results
     if [[ "$ALLOWED" == *"10.0.0.0/8"* ]]; then
-        echo "🎯 GIÁM ĐỐC - Full Access:"
-        echo "  • AllowedIPs = 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16"
-        echo "  ✅ Truy cập TẤT CẢ 3 servers"
-        echo "  ✅ Có quyền cao nhất trong hệ thống"
+        echo "🎯 ${GREEN}GIÁM ĐỐC${NC} - Full Network Access"
         echo ""
+        echo "AllowedIPs Configuration:"
+        echo "  • 10.0.0.0/8       → Tất cả 10.x.x.x (16M IPs)"
+        echo "  • 172.16.0.0/12    → 172.16-31.x.x (1M IPs)"
+        echo "  • 192.168.0.0/16   → Tất cả 192.168.x.x (64K IPs)"
+        echo ""
+        echo "Kết quả test routing:"
+        echo "  $([[ "$TEST1" == "ALLOWED" ]] && echo "✅" || echo "❌") 10.0.0.50   (Basic Server)"
+        echo "  $([[ "$TEST2" == "ALLOWED" ]] && echo "✅" || echo "❌") 10.1.0.50   (Manager Server)"
+        echo "  $([[ "$TEST3" == "ALLOWED" ]] && echo "✅" || echo "❌") 172.16.0.50 (Admin Server)"
+        echo ""
+        if [[ "$TEST1" == "ALLOWED" && "$TEST2" == "ALLOWED" && "$TEST3" == "ALLOWED" ]]; then
+            echo -e "${GREEN}✅ ĐÚNG: Giám đốc có full access!${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Một số routes bị blocked (có thể do subnet overlap)${NC}"
+        fi
+        
     elif [[ "$ALLOWED" == *"10.0.0.0/16"* ]]; then
-        echo "🎯 QUẢN LÝ - Manager Level:"
-        echo "  • AllowedIPs = 10.0.0.0/16, 10.1.0.0/16"
-        echo "  ✅ Truy cập được 2/3 servers (Basic + Manager)"
-        echo "  ❌ KHÔNG truy cập được Admin Server (172.16.0.50)"
+        echo "🎯 ${YELLOW}QUẢN LÝ${NC} - Manager Level Access"
         echo ""
+        echo "AllowedIPs Configuration:"
+        echo "  • 10.0.0.0/16      → 10.0.x.x (64K IPs)"
+        echo "  • 10.1.0.0/16      → 10.1.x.x (64K IPs)"
+        echo ""
+        echo "Kết quả test routing:"
+        echo "  $([[ "$TEST1" == "ALLOWED" ]] && echo "✅" || echo "❌") 10.0.0.50   (Basic) - Expected: ✅ ALLOWED"
+        echo "  $([[ "$TEST2" == "ALLOWED" ]] && echo "✅" || echo "❌") 10.1.0.50   (Manager) - Expected: ✅ ALLOWED"
+        echo "  $([[ "$TEST3" == "BLOCKED" ]] && echo "✅" || echo "❌") 172.16.0.50 (Admin) - Expected: ❌ BLOCKED"
+        echo ""
+        if [[ "$TEST1" == "ALLOWED" && "$TEST2" == "ALLOWED" && "$TEST3" == "BLOCKED" ]]; then
+            echo -e "${GREEN}✅ ĐÚNG: Quản lý chỉ truy cập employee + manager networks!${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Routes không đúng với expected behavior${NC}"
+        fi
+        
     elif [[ "$ALLOWED" == *"10.0.0.0/24"* ]]; then
-        echo "🎯 NHÂN VIÊN - Basic Access:"
-        echo "  • AllowedIPs = 10.0.0.0/24"
-        echo "  ✅ Chỉ truy cập được 1/3 servers (Basic)"
-        echo "  ❌ KHÔNG truy cập Manager Server (10.1.0.50)"
-        echo "  ❌ KHÔNG truy cập Admin Server (172.16.0.50)"
+        echo "🎯 ${RED}NHÂN VIÊN${NC} - Basic Employee Access"
         echo ""
+        echo "AllowedIPs Configuration:"
+        echo "  • 10.0.0.0/24      → Chỉ 10.0.0.x (256 IPs)"
+        echo ""
+        echo "Kết quả test routing:"
+        echo "  $([[ "$TEST1" == "ALLOWED" ]] && echo "✅" || echo "❌") 10.0.0.50   (Basic) - Expected: ✅ ALLOWED"
+        echo "  $([[ "$TEST2" == "BLOCKED" ]] && echo "✅" || echo "❌") 10.1.0.50   (Manager) - Expected: ❌ BLOCKED"
+        echo "  $([[ "$TEST3" == "BLOCKED" ]] && echo "✅" || echo "❌") 172.16.0.50 (Admin) - Expected: ❌ BLOCKED"
+        echo ""
+        if [[ "$TEST1" == "ALLOWED" && "$TEST2" == "BLOCKED" && "$TEST3" == "BLOCKED" ]]; then
+            echo -e "${GREEN}✅ ĐÚNG: Nhân viên chỉ truy cập basic server (Least Privilege)!${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Routes không đúng với expected behavior${NC}"
+        fi
     fi
     
-    echo -e "${BLUE}💡 SO SÁNH TẤT CẢ CÁC ROLE:${NC}"
+    echo ""
+    echo -e "${BLUE}💡 BẢNG SO SÁNH ACCESS MATRIX:${NC}"
     echo ""
     echo "┌─────────────┬──────────────┬──────────────┬──────────────┐"
     echo "│    ROLE     │  10.0.0.50   │  10.1.0.50   │ 172.16.0.50  │"
@@ -263,33 +215,30 @@ if wg-quick up wg0 2>&1 | tee /tmp/wg-output.log; then
     echo "└─────────────┴──────────────┴──────────────┴──────────────┘"
     echo ""
     
-    read -p "Press Enter để ngắt VPN và dọn dẹp..."
+    echo -e "${GREEN}🎯 ZERO TRUST PRINCIPLES:${NC}"
+    echo ""
+    echo "1️⃣  ${YELLOW}Least Privilege Access${NC}"
+    echo "    → WireGuard AllowedIPs chỉ cho phép route đến subnets cần thiết"
+    echo ""
+    echo "2️⃣  ${YELLOW}Network Segmentation${NC}"
+    echo "    → Mỗi role có phạm vi IPs khác nhau trong routing table"
+    echo ""
+    echo "3️⃣  ${YELLOW}Policy-Based Routing${NC}"
+    echo "    → Kernel routing table enforce policy qua VPN interface wg0"
+    echo ""
+    echo "4️⃣  ${YELLOW}Minimize Blast Radius${NC}"
+    echo "    → Nếu account bị compromise, chỉ ảnh hưởng trong AllowedIPs"
+    echo ""
+    
+    read -p "Press Enter để ngắt VPN..."
     wg-quick down wg0 2>/dev/null || true
 else
     echo -e "${RED}❌ Lỗi kết nối VPN${NC}"
-    echo ""
-    echo "Chi tiết lỗi:"
-    cat /tmp/wg-output.log
-    echo ""
-    echo "Gợi ý:"
-    echo "  - Kiểm tra backend đang chạy: docker compose ps backend"
-    echo "  - Kiểm tra port 51820: sudo netstat -nlup | grep 51820"
-    echo "  - Kiểm tra config file có đúng không"
+    echo "Kiểm tra: docker compose ps backend && sudo netstat -nlup | grep 51820"
 fi
-
-# Cleanup
-echo ""
-echo -e "${BLUE}🧹 Dọn dẹp...${NC}"
-docker rm -f ssh-basic ssh-manager ssh-admin 2>/dev/null || true
-docker network rm zt-test-basic zt-test-manager zt-test-admin 2>/dev/null || true
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════╗"
 echo "║                    ✅ DEMO HOÀN TẤT                      ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
-echo ""
-echo -e "${GREEN}🎯 NGUYÊN TẮC ZERO TRUST:${NC}"
-echo "  ✓ Phân quyền theo role cụ thể"
-echo "  ✓ Principle of Least Privilege"
-echo "  ✓ Giảm thiểu damage khi bị compromise"
 echo ""
