@@ -1,0 +1,71 @@
+╔═══════════════════════════════════════════════════════════════╗
+║       ✅ REBUILT & READY - TEST NGAY!                        ║
+╚═══════════════════════════════════════════════════════════════╝
+
+🔄 REBUILT FROM SCRATCH:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ Clean build (no cache)
+✓ Fresh containers
+✓ New volumes
+✓ Keycloak initialized (3 users)
+✓ Vault initialized
+✓ Ngrok tunnel active
+✓ All endpoints verified
+
+
+📱 MỞ TRÌNH DUYỆT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+https://a61fda8f0dbf.ngrok-free.app
+
+hoặc (nếu cùng wifi):
+http://192.168.1.9:3000
+
+
+🔐 ĐĂNG NHẬP:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Email:    zerotrust@gmail.com
+Password: password123
+
+
+🔑 SETUP TOTP (LẦN ĐẦU):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Mở Google Authenticator trên điện thoại
+2. Nhấn "+" → "Scan QR code"
+3. Quét mã QR trên màn hình
+4. Nhập 6 chữ số từ app
+5. ✅ Xong!
+
+
+📥 DOWNLOAD VPN:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Sau khi login xong, click nút "Download VPN Config"
+→ Lưu file .conf
+
+
+🔌 KẾT NỐI VPN:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Mở WireGuard app
+   (Chưa có? → https://www.wireguard.com/install/)
+2. Import file .conf
+3. Click "Activate"
+4. ✅ Connected!
+
+
+📊 STATUS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ Frontend: Rebuilt & running
+✓ Backend: Healthy
+✓ Keycloak: Running (OIDC Auth)
+✓ Vault: Running (Secrets)
+✓ PostgreSQL: Healthy
+✓ Redis: Running
+✓ Ngrok: Active
+✓ API endpoints: All working (verified)
+
+
+🎯 THESIS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Zero-Trust Infrastructure: WireGuard VPN + Vault + OIDC
+✅ CLEAN BUILD - READY FOR DEMO!
+
+Build time: Fri Dec 19 02:09:10 PM +07 2025

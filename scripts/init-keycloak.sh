@@ -33,7 +33,7 @@ MAX_RETRIES=30
 RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if curl -sf "$KEYCLOAK_URL/health/ready" > /dev/null 2>&1; then
+    if curl -sf "$KEYCLOAK_URL/realms/master" > /dev/null 2>&1; then
         echo "✓ Keycloak is ready"
         break
     fi
@@ -94,7 +94,7 @@ curl -s -X POST "$KEYCLOAK_URL/admin/realms/$REALM/clients" \
   -d "{
     \"clientId\": \"vpn-client\",
     \"enabled\": true,
-    \"publicClient\": false,
+    \"publicClient\": true,
     \"protocol\": \"openid-connect\",
     \"directAccessGrantsEnabled\": true,
     \"serviceAccountsEnabled\": false,
@@ -105,13 +105,15 @@ curl -s -X POST "$KEYCLOAK_URL/admin/realms/$REALM/clients" \
       \"http://localhost:3000/*\", 
       \"http://localhost:5000/*\",
       \"http://$SERVER_IP:3000/*\", 
-      \"http://$SERVER_IP:5000/*\"
+      \"http://$SERVER_IP:5000/*\",
+      \"https://*.ngrok-free.app/*\"
     ],
     \"webOrigins\": [
       \"http://localhost:3000\", 
       \"http://localhost:5000\",
       \"http://$SERVER_IP:3000\", 
-      \"http://$SERVER_IP:5000\"
+      \"http://$SERVER_IP:5000\",
+      \"https://*.ngrok-free.app\"
     ],
     \"attributes\": {
       \"access.token.lifespan\": \"28800\"
@@ -124,15 +126,15 @@ echo "✓ Client created"
 echo ""
 echo "👥 Creating test users..."
 
-# User 1: john (Employee)
+# User 1: duy1 (Employee)
 curl -s -X POST "$KEYCLOAK_URL/admin/realms/$REALM/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "john",
-    "email": "john@company.com",
-    "firstName": "John",
-    "lastName": "Doe",
+    "username": "duy1",
+    "email": "duy1@gmail.com",
+    "firstName": "Nguyen Van",
+    "lastName": "Duy",
     "enabled": true,
     "emailVerified": true,
     "credentials": [{
@@ -141,21 +143,23 @@ curl -s -X POST "$KEYCLOAK_URL/admin/realms/$REALM/users" \
       "temporary": false
     }],
     "attributes": {
-      "role": ["employee"]
+      "role": ["employee"],
+      "position": ["Software Developer"],
+      "department": ["Engineering"]
     }
   }' > /dev/null 2>&1
 
-echo "✓ User created: john@company.com (Employee)"
+echo "✓ User created: duy1@gmail.com (Employee)"
 
-# User 2: alice (Financial Officer)
+# User 2: tham1 (Manager)
 curl -s -X POST "$KEYCLOAK_URL/admin/realms/$REALM/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "alice",
-    "email": "alice@company.com",
-    "firstName": "Alice",
-    "lastName": "Smith",
+    "username": "tham1",
+    "email": "tham1@gmail.com",
+    "firstName": "Le Thi",
+    "lastName": "Tham",
     "enabled": true,
     "emailVerified": true,
     "credentials": [{
@@ -164,21 +168,23 @@ curl -s -X POST "$KEYCLOAK_URL/admin/realms/$REALM/users" \
       "temporary": false
     }],
     "attributes": {
-      "role": ["employee", "financial_officer"]
+      "role": ["manager"],
+      "position": ["Finance Manager"],
+      "department": ["Finance"]
     }
   }' > /dev/null 2>&1
 
-echo "✓ User created: alice@company.com (Financial Officer)"
+echo "✓ User created: tham1@gmail.com (Manager)"
 
-# User 3: bob (DBA/Admin)
+# User 3: zerotrust (Admin)
 curl -s -X POST "$KEYCLOAK_URL/admin/realms/$REALM/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "bob",
-    "email": "bob@company.com",
-    "firstName": "Bob",
-    "lastName": "Johnson",
+    "username": "zerotrust",
+    "email": "zerotrust@gmail.com",
+    "firstName": "Admin",
+    "lastName": "User",
     "enabled": true,
     "emailVerified": true,
     "credentials": [{
@@ -187,11 +193,13 @@ curl -s -X POST "$KEYCLOAK_URL/admin/realms/$REALM/users" \
       "temporary": false
     }],
     "attributes": {
-      "role": ["employee", "dba", "admin"]
+      "role": ["admin"],
+      "position": ["CTO"],
+      "department": ["IT"]
     }
   }' > /dev/null 2>&1
 
-echo "✓ User created: bob@company.com (DBA/Admin)"
+echo "✓ User created: zerotrust@gmail.com (Admin)"
 
 echo ""
 echo "=========================================="
@@ -206,7 +214,7 @@ echo "Realm: $REALM"
 echo "Client ID: vpn-client"
 echo ""
 echo "Test Users (all password: password123):"
-echo "1. john@company.com   - Employee"
-echo "2. alice@company.com  - Financial Officer"
-echo "3. bob@company.com    - DBA/Admin"
+echo "1. duy1@gmail.com      - Employee (Software Developer)"
+echo "2. tham1@gmail.com     - Manager (Finance Manager)"
+echo "3. zerotrust@gmail.com - Admin (CTO)"
 echo ""

@@ -15,7 +15,7 @@ function Login() {
     setLoading(true);
 
     try {
-      const response = await api.post('/api/auth/login', {
+      const response = await api.post('/auth/login', {
         username,
         password
       });
@@ -24,9 +24,22 @@ function Login() {
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('refresh_token', response.data.refresh_token);
 
-      // If TOTP required, go to setup/verify
+      // Check if user has TOTP setup
       if (response.data.requires_totp) {
-        navigate('/totp-setup');
+        // Check TOTP status from backend
+        try {
+          const statusResponse = await api.get('/auth/totp/status');
+          if (statusResponse.data.setup_completed) {
+            // User already completed setup, go to verify
+            navigate('/totp-verify');
+          } else {
+            // First time, need to setup
+            navigate('/totp-setup');
+          }
+        } catch (err) {
+          // If status check fails, assume first time setup
+          navigate('/totp-setup');
+        }
       } else {
         navigate('/dashboard');
       }

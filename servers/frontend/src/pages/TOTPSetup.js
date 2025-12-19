@@ -7,19 +7,59 @@ function TOTPSetup() {
   const [secret, setSecret] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [blocked, setBlocked] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    setupTOTP();
-  }, []);
+    checkStatusAndSetup();
+    
+    // Block browser back button
+    const handlePopState = () => {
+      if (blocked) {
+        navigate('/totp-verify', { replace: true });
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [blocked]);
+
+  const checkStatusAndSetup = async () => {
+    try {
+      // Check if already setup first
+      const statusResponse = await api.get('/auth/totp/status');
+      
+      if (statusResponse.data.setup_completed) {
+        // Already setup - BLOCK and redirect
+        console.log('TOTP already configured, BLOCKING access to QR page');
+        setBlocked(true);
+        navigate('/totp-verify', { replace: true });
+        return;
+      }
+      
+      // Not setup yet - show QR code
+      await setupTOTP();
+    } catch (err) {
+      console.error('Status check error:', err);
+      // If status check fails, try setup anyway
+      await setupTOTP();
+    }
+  };
 
   const setupTOTP = async () => {
     try {
-      const response = await api.post('/api/auth/totp/setup');
+      const response = await api.post('/auth/totp/setup');
       setQrCode(response.data.qr_code);
       setSecret(response.data.secret);
       setLoading(false);
     } catch (err) {
+      // Check if error is because already setup
+      if (err.response?.data?.already_setup || err.response?.status === 403) {
+        console.log('Already setup (403), BLOCKING and redirecting...');
+        setBlocked(true);
+        navigate('/totp-verify', { replace: true });
+        return;
+      }
       setError(err.response?.data?.error || 'Failed to setup TOTP');
       setLoading(false);
     }

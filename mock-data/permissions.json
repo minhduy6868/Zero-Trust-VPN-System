@@ -1,18 +1,25 @@
 {
   "roles": {
-    "employee": {
-      "display_name": "Employee",
+    "nhan_vien": {
+      "display_name": "Nh\u00e2n Vi\u00ean",
       "level": "limited",
       "vpn_access": "basic",
       "databases": {
         "allowed": [],
-        "read_only": []
+        "read_only": [
+          "employee_portal"
+        ]
       },
       "servers": {
-        "allowed": ["web-server-1"]
+        "allowed": [
+          "web-server-1"
+        ]
       },
       "apis": {
-        "allowed": ["customer-api"]
+        "allowed": [
+          "customer-api",
+          "employee-api"
+        ]
       },
       "features": {
         "ssh_access": false,
@@ -20,47 +27,80 @@
         "admin_panel": false,
         "user_management": false,
         "view_logs": false,
-        "modify_policies": false
+        "modify_policies": false,
+        "view_own_data": true,
+        "submit_requests": true,
+        "view_timesheets": true,
+        "edit_own_profile": true
       },
-      "description": "Basic access for regular employees"
+      "description": "Nh\u00e2n vi\u00ean c\u1ea5p th\u1ea5p, ch\u1ec9 c\u00f3 quy\u1ec1n truy c\u1eadp c\u01a1 b\u1ea3n"
     },
-    "financial_officer": {
-      "display_name": "Financial Officer",
+    "quan_ly": {
+      "display_name": "Qu\u1ea3n L\u00fd / K\u1ebf To\u00e1n",
       "level": "medium",
       "vpn_access": "full",
       "databases": {
-        "allowed": ["customer_db", "finance_db"],
-        "read_only": ["customer_db"]
+        "allowed": [
+          "finance_db",
+          "hr_db"
+        ],
+        "read_only": [
+          "customer_db"
+        ]
       },
       "servers": {
-        "allowed": ["web-server-1", "web-server-2", "finance-server"]
+        "allowed": [
+          "web-server-1",
+          "web-server-2",
+          "finance-server"
+        ]
       },
       "apis": {
-        "allowed": ["customer-api", "finance-api", "reports-api"]
+        "allowed": [
+          "customer-api",
+          "finance-api",
+          "reports-api",
+          "hr-api"
+        ]
       },
       "features": {
         "ssh_access": true,
-        "database_write": false,
+        "database_write": true,
         "admin_panel": false,
         "user_management": false,
         "view_logs": true,
-        "modify_policies": false
+        "modify_policies": false,
+        "view_own_data": true,
+        "submit_requests": true,
+        "view_timesheets": true,
+        "edit_own_profile": true,
+        "approve_requests": true,
+        "view_team_data": true,
+        "manage_timesheets": true,
+        "view_financials": true,
+        "export_reports": true
       },
-      "description": "Access to financial data and reports"
+      "description": "Qu\u1ea3n l\u00fd v\u00e0 k\u1ebf to\u00e1n, c\u00f3 quy\u1ec1n truy c\u1eadp t\u00e0i ch\u00ednh v\u00e0 nh\u00e2n s\u1ef1"
     },
-    "dba_admin": {
-      "display_name": "DBA/Administrator",
+    "giam_doc": {
+      "display_name": "Gi\u00e1m \u0110\u1ed1c",
       "level": "full",
       "vpn_access": "priority",
       "databases": {
-        "allowed": ["*"],
+        "allowed": [
+          "*"
+        ],
         "read_only": []
       },
       "servers": {
-        "allowed": ["*"]
+        "allowed": [
+          "*"
+        ]
       },
       "apis": {
-        "allowed": ["*"]
+        "allowed": [
+          "*"
+        ]
       },
       "features": {
         "ssh_access": true,
@@ -68,120 +108,153 @@
         "admin_panel": true,
         "user_management": true,
         "view_logs": true,
-        "modify_policies": true
+        "modify_policies": true,
+        "view_own_data": true,
+        "submit_requests": true,
+        "view_timesheets": true,
+        "edit_own_profile": true,
+        "approve_requests": true,
+        "view_team_data": true,
+        "manage_timesheets": true,
+        "view_financials": true,
+        "export_reports": true,
+        "system_administration": true,
+        "security_management": true,
+        "infrastructure_access": true,
+        "audit_all_logs": true
       },
-      "description": "Full system access with all privileges"
+      "description": "Gi\u00e1m \u0111\u1ed1c c\u1ea5p cao, c\u00f3 to\u00e0n quy\u1ec1n qu\u1ea3n tr\u1ecb h\u1ec7 th\u1ed1ng"
     }
+  },
+  "user_role_mapping": {
+    "duy1@gmail.com": "nhan_vien",
+    "tham1@gmail.com": "quan_ly",
+    "zerotrust@gmail.com": "giam_doc",
+    "intern1@gmail.com": "nhan_vien",
+    "hr@gmail.com": "quan_ly",
+    "dba@gmail.com": "quan_ly",
+    "marketing@gmail.com": "nhan_vien",
+    "revoked@gmail.com": "nhan_vien"
   },
   "resources": {
     "databases": [
       {
-        "id": "customer_db",
-        "name": "Customer Database",
-        "description": "Customer records and profiles",
-        "status": "active",
-        "icon": "database"
+        "id": "employee_portal",
+        "name": "Employee Portal DB",
+        "type": "PostgreSQL"
       },
       {
         "id": "finance_db",
         "name": "Finance Database",
-        "description": "Financial transactions and reports",
-        "status": "active",
-        "icon": "dollar"
+        "type": "MySQL"
       },
       {
         "id": "hr_db",
         "name": "HR Database",
-        "description": "Employee records and payroll",
-        "status": "active",
-        "icon": "users"
+        "type": "PostgreSQL"
       },
       {
-        "id": "analytics_db",
-        "name": "Analytics Database",
-        "description": "Business intelligence and metrics",
-        "status": "active",
-        "icon": "chart"
+        "id": "customer_db",
+        "name": "Customer Database",
+        "type": "MongoDB"
       }
     ],
     "servers": [
       {
         "id": "web-server-1",
         "name": "Web Server 1",
-        "description": "Public website frontend",
-        "ip": "10.0.0.20",
-        "status": "active",
-        "icon": "server"
+        "ip": "10.0.1.10"
       },
       {
         "id": "web-server-2",
         "name": "Web Server 2",
-        "description": "Internal web applications",
-        "ip": "10.0.0.21",
-        "status": "active",
-        "icon": "server"
+        "ip": "10.0.1.11"
       },
       {
         "id": "finance-server",
         "name": "Finance Server",
-        "description": "Financial reporting system",
-        "ip": "10.0.0.25",
-        "status": "active",
-        "icon": "calculator"
-      },
-      {
-        "id": "db-server-1",
-        "name": "Database Server 1",
-        "description": "Primary database server",
-        "ip": "10.0.0.10",
-        "status": "active",
-        "icon": "database"
-      },
-      {
-        "id": "db-server-2",
-        "name": "Database Server 2",
-        "description": "Backup database server",
-        "ip": "10.0.0.11",
-        "status": "active",
-        "icon": "database"
-      }
-    ],
-    "apis": [
-      {
-        "id": "customer-api",
-        "name": "Customer API",
-        "endpoint": "/api/v1/customers",
-        "description": "Customer data operations"
-      },
-      {
-        "id": "finance-api",
-        "name": "Finance API",
-        "endpoint": "/api/v1/finance",
-        "description": "Financial data operations"
-      },
-      {
-        "id": "hr-api",
-        "name": "HR API",
-        "endpoint": "/api/v1/hr",
-        "description": "HR data operations"
-      },
-      {
-        "id": "analytics-api",
-        "name": "Analytics API",
-        "endpoint": "/api/v1/analytics",
-        "description": "Analytics and reporting"
-      },
-      {
-        "id": "reports-api",
-        "name": "Reports API",
-        "endpoint": "/api/v1/reports",
-        "description": "Generate and view reports"
+        "ip": "10.0.2.20"
       }
     ]
   },
-  "user_role_mapping": {
-    "john@company.com": "employee",
-    "alice@company.com": "financial_officer",
-    "bob@company.com": "dba_admin"
-  }
+  "company_data": {
+    "employees": [
+      {
+        "id": "EMP001",
+        "name": "Nguy\u1ec5n V\u0103n Duy",
+        "email": "duy1@gmail.com",
+        "department": "IT",
+        "position": "Backend Developer"
+      },
+      {
+        "id": "EMP002",
+        "name": "Tr\u1ea7n Th\u1ecb Th\u1eafm",
+        "email": "tham1@gmail.com",
+        "department": "Finance",
+        "position": "Finance Manager"
+      },
+      {
+        "id": "EMP003",
+        "name": "Admin User",
+        "email": "zerotrust@gmail.com",
+        "department": "Management",
+        "position": "CTO"
+      }
+    ],
+    "leave_requests": [
+      {
+        "days": 3,
+        "employee_email": "duy1@gmail.com",
+        "end_date": "2025-12-27",
+        "id": "LR001",
+        "reason": "Holiday vacation",
+        "start_date": "2025-12-25",
+        "status": "pending",
+        "submitted_date": "2025-12-19",
+        "type": "annual"
+      }
+    ],
+    "timesheets": [
+      {
+        "id": "TS001",
+        "employee_email": "duy1@gmail.com",
+        "date": "2025-12-19",
+        "hours": 8,
+        "project": "Zero-Trust VPN",
+        "description": "Backend development"
+      }
+    ],
+    "projects": [
+      {
+        "id": "PRJ001",
+        "name": "Zero-Trust VPN System",
+        "status": "active",
+        "team_members": [
+          "duy1@gmail.com",
+          "tham1@gmail.com",
+          "zerotrust@gmail.com"
+        ]
+      },
+      {
+        "id": "PRJ002",
+        "name": "Finance Portal",
+        "status": "planning",
+        "team_members": [
+          "tham1@gmail.com"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "id": "EXP001",
+        "employee_email": "duy1@gmail.com",
+        "date": "2025-12-19",
+        "amount": 150000,
+        "category": "Software",
+        "description": "PyCharm license",
+        "status": "pending"
+      }
+    ]
+  },
+  "default_role": "nhan_vien"
 }

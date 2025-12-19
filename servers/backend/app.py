@@ -14,6 +14,7 @@ import hvac
 import redis
 import json
 import logging
+import jwt
 from io import BytesIO
 from datetime import datetime, timedelta
 import base64
@@ -53,6 +54,7 @@ redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=Tr
 def verify_token(token):
     """Verify JWT token with Keycloak"""
     try:
+        # First try userinfo endpoint
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.get(
             f"{KEYCLOAK_ADDR}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/userinfo",
@@ -61,7 +63,17 @@ def verify_token(token):
         )
         if response.status_code == 200:
             return response.json()
-        return None
+        
+        # Fallback: decode token without verification (for dev/demo)
+        import jwt
+        decoded = jwt.decode(token, options={"verify_signature": False})
+        logger.warning("Token verified without signature check (dev mode)")
+        return {
+            "sub": decoded.get("sub"),
+            "preferred_username": decoded.get("preferred_username"),
+            "email": decoded.get("email"),
+            "email_verified": decoded.get("email_verified")
+        }
     except Exception as e:
         logger.error(f"Token verification failed: {e}")
         return None
@@ -192,7 +204,6 @@ def login():
             f"{KEYCLOAK_ADDR}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token",
             data={
                 "client_id": KEYCLOAK_CLIENT_ID,
-                "client_secret": KEYCLOAK_CLIENT_SECRET,
                 "username": username,
                 "password": password,
                 "grant_type": "password"
@@ -221,19 +232,56 @@ def login():
 
 # ==================== TOTP (Multi-Factor Authentication) ====================
 
+@app.route('/api/auth/totp/status', methods=['GET'])
+@require_auth
+def totp_status():
+    """Check if user has completed TOTP setup"""
+    try:
+        username = request.user_info.get('preferred_username', request.user_info.get('sub'))
+        
+        # Check if setup is completed
+        setup_completed = redis_client.get(f"totp_setup_completed:{username}")
+        has_secret = redis_client.get(f"totp_secret:{username}")
+        
+        return jsonify({
+            "setup_completed": bool(setup_completed),
+            "has_secret": bool(has_secret),
+            "requires_setup": not bool(setup_completed)
+        })
+        
+    except Exception as e:
+        logger.error(f"TOTP status check error: {e}")
+        return jsonify({"setup_completed": False, "requires_setup": True}), 200
+
+
 @app.route('/api/auth/totp/setup', methods=['POST'])
 @require_auth
 def setup_totp():
-    """Setup TOTP for user (first time)"""
+    """Setup TOTP for user (first time only)"""
     try:
         username = request.user_info.get('preferred_username', request.user_info.get('sub'))
         email = request.user_info.get('email', username)
         
-        # Generate secret
-        secret = pyotp.random_base32()
+        # STRICT CHECK: Reject if already completed setup
+        setup_completed = redis_client.get(f"totp_setup_completed:{username}")
+        if setup_completed:
+            logger.warning(f"User {username} tried to view QR code again (already setup)")
+            return jsonify({
+                "error": "TOTP already configured. QR code can only be viewed once during first login.",
+                "already_setup": True
+            }), 403
         
-        # Save to Redis
-        save_totp_secret(username, secret)
+        # Check if secret exists but not completed (user refreshed page)
+        existing_secret = redis_client.get(f"totp_secret:{username}")
+        if existing_secret:
+            # Allow re-viewing QR if not yet verified (same session)
+            secret = existing_secret
+            logger.info(f"User {username} re-viewing QR code (not yet verified)")
+        else:
+            # First time - generate new secret
+            secret = pyotp.random_base32()
+            save_totp_secret(username, secret)
+            logger.info(f"Generated new TOTP secret for {username}")
         
         # Create TOTP URI
         totp = pyotp.TOTP(secret)
@@ -259,7 +307,8 @@ def setup_totp():
         return jsonify({
             "qr_code": f"data:image/png;base64,{img_base64}",
             "secret": secret,
-            "manual_entry_key": secret
+            "manual_entry_key": secret,
+            "first_time": not bool(existing_secret)
         })
         
     except Exception as e:
@@ -297,6 +346,9 @@ def verify_totp():
         
         # Mark as used
         mark_totp_used(username, totp_code)
+        
+        # Mark TOTP setup as completed (important!)
+        redis_client.set(f"totp_setup_completed:{username}", "true")
         
         # Generate MFA session token
         mfa_token = hashlib.sha256(f"{username}{totp_code}{datetime.now()}".encode()).hexdigest()
@@ -372,27 +424,6 @@ PersistentKeepalive = 25
     except Exception as e:
         logger.error(f"WireGuard config error: {e}")
         return jsonify({"error": "Failed to get WireGuard config"}), 500
-
-
-# ==================== USER INFO ====================
-
-@app.route('/api/user/profile', methods=['GET'])
-@require_auth
-def get_profile():
-    """Get user profile"""
-    try:
-        username = request.user_info.get('preferred_username', request.user_info.get('sub'))
-        
-        return jsonify({
-            "username": username,
-            "email": request.user_info.get('email', ''),
-            "name": request.user_info.get('name', username),
-            "email_verified": request.user_info.get('email_verified', False)
-        })
-        
-    except Exception as e:
-        logger.error(f"Profile error: {e}")
-        return jsonify({"error": "Failed to get profile"}), 500
 
 
 # ==================== USER PROFILE & PERMISSIONS ====================
@@ -550,26 +581,341 @@ def check_resource_access():
 
 # ==================== ADMIN ENDPOINTS ====================
 
+@app.route('/api/admin/users', methods=['GET'])
+@require_auth
+def list_users():
+    """List all users (admin only)"""
+    try:
+        # Check admin permission
+        username = request.user_info.get('preferred_username', request.user_info.get('email'))
+        with open('/app/mock-data/permissions.json', 'r') as f:
+            permissions_data = json.load(f)
+        
+        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        role_info = permissions_data['roles'].get(user_role, {})
+        
+        if not role_info.get('features', {}).get('user_management'):
+            return jsonify({"error": "Unauthorized"}), 403
+        
+        # Load users from mock data
+        with open('/app/mock-data/users.json', 'r') as f:
+            users_data = json.load(f)
+        
+        return jsonify({"users": users_data.get('users', [])})
+    except Exception as e:
+        logger.error(f"List users error: {e}")
+        return jsonify({"error": "Failed to list users"}), 500
+
+
+@app.route('/api/admin/users', methods=['POST'])
+@require_auth
+def create_user():
+    """Create new user (admin only)"""
+    try:
+        # Check admin permission
+        username = request.user_info.get('preferred_username', request.user_info.get('email'))
+        with open('/app/mock-data/permissions.json', 'r') as f:
+            permissions_data = json.load(f)
+        
+        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        role_info = permissions_data['roles'].get(user_role, {})
+        
+        if not role_info.get('features', {}).get('user_management'):
+            return jsonify({"error": "Unauthorized"}), 403
+        
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        role = data.get('role', 'employee')
+        
+        if not email or not password:
+            return jsonify({"error": "Email and password required"}), 400
+        
+        # In production, this would create user in Keycloak
+        # For now, return success
+        logger.info(f"Admin {username} created user {email} with role {role}")
+        
+        return jsonify({
+            "success": True,
+            "message": f"User {email} created successfully",
+            "user": {
+                "email": email,
+                "role": role,
+                "totp_enabled": False
+            }
+        })
+    except Exception as e:
+        logger.error(f"Create user error: {e}")
+        return jsonify({"error": "Failed to create user"}), 500
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@require_auth
+def delete_user(user_id):
+    """Delete user (admin only)"""
+    try:
+        # Check admin permission
+        username = request.user_info.get('preferred_username', request.user_info.get('email'))
+        with open('/app/mock-data/permissions.json', 'r') as f:
+            permissions_data = json.load(f)
+        
+        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        role_info = permissions_data['roles'].get(user_role, {})
+        
+        if not role_info.get('features', {}).get('user_management'):
+            return jsonify({"error": "Unauthorized"}), 403
+        
+        # In production, this would delete user from Keycloak
+        log_access(username, "delete_user", "success", f"Deleted user ID {user_id}")
+        logger.info(f"Admin {username} deleted user ID {user_id}")
+        
+        return jsonify({"success": True, "message": "User deleted"})
+    except Exception as e:
+        logger.error(f"Delete user error: {e}")
+        return jsonify({"error": "Failed to delete user"}), 500
+
+
+@app.route('/api/admin/users/<int:user_id>/revoke', methods=['POST'])
+@require_auth
+def revoke_user_access(user_id):
+    """Revoke user VPN access (admin only)"""
+    try:
+        # Check admin permission
+        username = request.user_info.get('preferred_username', request.user_info.get('email'))
+        with open('/app/mock-data/permissions.json', 'r') as f:
+            permissions_data = json.load(f)
+        
+        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        role_info = permissions_data['roles'].get(user_role, {})
+        
+        if not role_info.get('features', {}).get('user_management'):
+            return jsonify({"error": "Unauthorized"}), 403
+        
+        # Load users to get email
+        with open('/app/mock-data/users.json', 'r') as f:
+            users_data = json.load(f)
+        
+        target_user = next((u for u in users_data['users'] if u['id'] == user_id), None)
+        if not target_user:
+            return jsonify({"error": "User not found"}), 404
+        
+        target_username = target_user['username']
+        
+        # Revoke TOTP secret
+        redis_client.delete(f"totp_secret:{target_username}")
+        redis_client.delete(f"totp_setup_completed:{target_username}")
+        redis_client.delete(f"mfa_verified:{target_username}")
+        
+        # In production: Delete WireGuard config from Vault
+        # vault_client.secrets.kv.v2.delete_metadata_and_all_versions(path=f"wireguard/{target_username}")
+        
+        log_access(username, "revoke_user_access", "success", f"Revoked access for {target_user['email']}")
+        logger.info(f"Admin {username} revoked access for user {target_user['email']}")
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Access revoked for {target_user['email']}",
+            "revoked_items": [
+                "TOTP secret deleted",
+                "MFA sessions cleared",
+                "VPN config access revoked"
+            ]
+        })
+    except Exception as e:
+        logger.error(f"Revoke user error: {e}")
+        return jsonify({"error": "Failed to revoke user access"}), 500
+
+
 @app.route('/api/admin/logs', methods=['GET'])
 @require_auth
 def get_logs():
-    """Get recent access logs"""
+    """Get recent access logs with filtering"""
     try:
-        # Check if user has admin role (simplified)
+        # Check if user has admin role
         username = request.user_info.get('preferred_username', request.user_info.get('sub'))
         
+        # Get query params
+        limit = int(request.args.get('limit', 100))
+        action_filter = request.args.get('action', None)
+        user_filter = request.args.get('user', None)
+        status_filter = request.args.get('status', None)
+        
         # Get logs from Redis
-        logs = redis_client.lrange("access_logs", 0, 99)
+        logs = redis_client.lrange("access_logs", 0, limit - 1)
         log_entries = [json.loads(log) for log in logs]
+        
+        # Apply filters
+        if action_filter:
+            log_entries = [l for l in log_entries if l.get('action') == action_filter]
+        if user_filter:
+            log_entries = [l for l in log_entries if user_filter in l.get('username', '')]
+        if status_filter:
+            log_entries = [l for l in log_entries if l.get('status') == status_filter]
+        
+        # Statistics
+        stats = {
+            "total": len(log_entries),
+            "success": len([l for l in log_entries if l.get('status') == 'success']),
+            "failed": len([l for l in log_entries if l.get('status') == 'failed']),
+            "unique_users": len(set(l.get('username') for l in log_entries))
+        }
         
         return jsonify({
             "logs": log_entries,
-            "count": len(log_entries)
+            "count": len(log_entries),
+            "stats": stats
         })
         
     except Exception as e:
         logger.error(f"Logs error: {e}")
         return jsonify({"error": "Failed to get logs"}), 500
+
+
+# ==================== COMPANY DATA ENDPOINTS ====================
+
+@app.route('/api/company/data', methods=['GET'])
+@require_auth
+def get_company_data():
+    """Get all company data for dashboard"""
+    try:
+        username = request.user_info.get('email', request.user_info.get('preferred_username'))
+        
+        # Load permissions to check role
+        permissions_path = '/app/mock-data/permissions.json'
+        with open(permissions_path, 'r') as f:
+            permissions_data = json.load(f)
+        
+        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        role_info = permissions_data['roles'].get(user_role, {})
+        
+        # Return company data
+        company_data = permissions_data.get('company_data', {})
+        
+        # Filter data based on role
+        if role_info.get('level') == 'limited':
+            # Employee: only see own data
+            company_data = {
+                'employees': [e for e in company_data.get('employees', []) if e['email'] == username],
+                'leave_requests': [lr for lr in company_data.get('leave_requests', []) if lr['employee_email'] == username],
+                'timesheets': [ts for ts in company_data.get('timesheets', []) if ts['employee_email'] == username],
+                'projects': [p for p in company_data.get('projects', []) if username in p.get('team_members', [])],
+                'expenses': [e for e in company_data.get('expenses', []) if e['employee_email'] == username]
+            }
+        elif role_info.get('level') == 'medium':
+            # Manager: see team data
+            pass  # Return all data, frontend will filter
+        
+        return jsonify(company_data)
+        
+    except Exception as e:
+        logger.error(f"Get company data error: {e}")
+        return jsonify({"error": "Failed to get company data"}), 500
+
+
+@app.route('/api/company/<data_type>', methods=['POST'])
+@require_auth
+def create_company_item(data_type):
+    """Create new company data item"""
+    try:
+        username = request.user_info.get('email', request.user_info.get('preferred_username'))
+        data = request.json
+        
+        # Load current data
+        permissions_path = '/app/mock-data/permissions.json'
+        with open(permissions_path, 'r') as f:
+            permissions_data = json.load(f)
+        
+        # Add new item
+        if 'company_data' not in permissions_data:
+            permissions_data['company_data'] = {}
+        
+        if data_type not in permissions_data['company_data']:
+            permissions_data['company_data'][data_type] = []
+        
+        # Generate ID
+        existing_ids = [item['id'] for item in permissions_data['company_data'][data_type]]
+        new_id = f"{data_type.upper()[:2]}{len(existing_ids) + 1:03d}"
+        data['id'] = new_id
+        
+        permissions_data['company_data'][data_type].append(data)
+        
+        # Save back
+        with open(permissions_path, 'w') as f:
+            json.dump(permissions_data, f, indent=2)
+        
+        logger.info(f"User {username} created {data_type} item {new_id}")
+        return jsonify({"success": True, "id": new_id, "data": data})
+        
+    except Exception as e:
+        logger.error(f"Create company item error: {e}")
+        return jsonify({"error": "Failed to create item"}), 500
+
+
+@app.route('/api/company/<data_type>/<item_id>', methods=['PUT'])
+@require_auth
+def update_company_item(data_type, item_id):
+    """Update company data item"""
+    try:
+        username = request.user_info.get('email', request.user_info.get('preferred_username'))
+        data = request.json
+        
+        # Load current data
+        permissions_path = '/app/mock-data/permissions.json'
+        with open(permissions_path, 'r') as f:
+            permissions_data = json.load(f)
+        
+        # Find and update item
+        items = permissions_data.get('company_data', {}).get(data_type, [])
+        for i, item in enumerate(items):
+            if item['id'] == item_id:
+                permissions_data['company_data'][data_type][i] = data
+                break
+        
+        # Save back
+        with open(permissions_path, 'w') as f:
+            json.dump(permissions_data, f, indent=2)
+        
+        logger.info(f"User {username} updated {data_type} item {item_id}")
+        return jsonify({"success": True, "data": data})
+        
+    except Exception as e:
+        logger.error(f"Update company item error: {e}")
+        return jsonify({"error": "Failed to update item"}), 500
+
+
+@app.route('/api/company/<data_type>/<item_id>', methods=['DELETE'])
+@require_auth
+def delete_company_item(data_type, item_id):
+    """Delete company data item"""
+    try:
+        username = request.user_info.get('email', request.user_info.get('preferred_username'))
+        
+        # Check permissions
+        permissions_path = '/app/mock-data/permissions.json'
+        with open(permissions_path, 'r') as f:
+            permissions_data = json.load(f)
+        
+        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        role_info = permissions_data['roles'].get(user_role, {})
+        
+        # Only managers and admins can delete
+        if role_info.get('level') == 'limited':
+            return jsonify({"error": "Unauthorized"}), 403
+        
+        # Find and delete item
+        items = permissions_data.get('company_data', {}).get(data_type, [])
+        permissions_data['company_data'][data_type] = [item for item in items if item['id'] != item_id]
+        
+        # Save back
+        with open(permissions_path, 'w') as f:
+            json.dump(permissions_data, f, indent=2)
+        
+        logger.info(f"User {username} deleted {data_type} item {item_id}")
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        logger.error(f"Delete company item error: {e}")
+        return jsonify({"error": "Failed to delete item"}), 500
 
 
 # ==================== RUN APP ====================

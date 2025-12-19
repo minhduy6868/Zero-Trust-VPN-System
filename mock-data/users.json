@@ -1,34 +1,167 @@
 {
   "users": [
     {
-      "username": "john",
-      "email": "john@company.com",
+      "id": 1,
+      "username": "duy1",
+      "email": "duy1@gmail.com",
       "password": "password123",
-      "name": "John Doe",
-      "role": "employee",
-      "department": "Engineering",
-      "ip_address": "10.0.0.100",
-      "totp_enabled": true
+      "name": "Nguyễn Văn Duy",
+      "role": "nhan_vien",
+      "department": "Phòng Công Nghệ",
+      "position": "Lập Trình Viên Backend",
+      "hire_date": "2023-03-15",
+      "vpn_ip": "10.0.0.100",
+      "totp_enabled": true,
+      "status": "active",
+      "last_login": "2025-12-19T09:30:00Z",
+      "vpn_status": "connected",
+      "allowed_resources": [
+        "dev-server-1 (10.0.0.50)",
+        "staging-db (10.0.0.51)",
+        "git-server (10.0.0.52)"
+      ]
     },
     {
-      "username": "alice",
-      "email": "alice@company.com",
+      "id": 2,
+      "username": "tham1",
+      "email": "tham1@gmail.com",
       "password": "password123",
-      "name": "Alice Smith",
-      "role": "financial_officer",
-      "department": "Finance",
-      "ip_address": "10.0.0.101",
-      "totp_enabled": true
+      "name": "Trần Thị Thắm",
+      "role": "quan_ly",
+      "department": "Phòng Kế Toán",
+      "position": "Trưởng Phòng Kế Toán",
+      "hire_date": "2021-08-20",
+      "vpn_ip": "10.0.0.101",
+      "totp_enabled": true,
+      "status": "active",
+      "last_login": "2025-12-19T08:15:00Z",
+      "vpn_status": "disconnected",
+      "allowed_resources": [
+        "finance-server (10.0.0.60)",
+        "finance-db (10.0.0.61)",
+        "hr-system (10.0.0.62)",
+        "payroll-app (10.0.0.63)"
+      ]
     },
     {
-      "username": "bob",
-      "email": "bob@company.com",
+      "id": 3,
+      "username": "zerotrust",
+      "email": "zerotrust@gmail.com",
       "password": "password123",
-      "name": "Bob Johnson",
-      "role": "dba_admin",
-      "department": "IT Operations",
-      "ip_address": "10.0.0.102",
-      "totp_enabled": true
+      "name": "Lê Quốc An",
+      "role": "giam_doc",
+      "department": "Ban Giám Đốc",
+      "position": "Giám Đốc Công Nghệ",
+      "hire_date": "2020-01-10",
+      "vpn_ip": "10.0.0.102",
+      "totp_enabled": true,
+      "status": "active",
+      "last_login": "2025-12-19T10:45:00Z",
+      "vpn_status": "connected",
+      "allowed_resources": [
+        "all-systems (10.0.0.0/8)",
+        "admin-panel (*)",
+        "infrastructure (*)"
+      ]
+    },
+    {
+      "id": 4,
+      "username": "intern1",
+      "email": "intern1@gmail.com",
+      "password": "password123",
+      "name": "Phạm Minh Hiếu",
+      "role": "nhan_vien",
+      "department": "Phòng Công Nghệ",
+      "position": "Thực Tập Sinh IT",
+      "hire_date": "2025-11-01",
+      "vpn_ip": "10.0.0.103",
+      "totp_enabled": false,
+      "status": "active",
+      "last_login": "2025-12-18T14:20:00Z",
+      "vpn_status": "not_configured",
+      "allowed_resources": [
+        "dev-server-1 (10.0.0.50)"
+      ]
+    },
+    {
+      "id": 5,
+      "username": "hoa1",
+      "email": "hoa1@gmail.com",
+      "password": "password123",
+      "name": "Nguyễn Thị Hoa",
+      "role": "quan_ly",
+      "department": "Phòng Nhân Sự",
+      "position": "Trưởng Phòng Nhân Sự",
+      "hire_date": "2021-09-15",
+      "vpn_ip": "10.0.0.104",
+      "totp_enabled": true,
+      "status": "active",
+      "last_login": "2025-12-19T07:00:00Z",
+      "vpn_status": "disconnected",
+      "allowed_resources": [
+        "hr-system (10.0.0.62)",
+        "payroll-app (10.0.0.63)",
+        "recruitment-portal (10.0.0.64)"
+      ]
+    },
+    {
+      "id": 6,
+      "username": "tuan1",
+      "email": "tuan1@gmail.com",
+      "password": "password123",
+      "name": "Trần Minh Tuấn",
+      "role": "quan_ly",
+      "department": "Phòng Công Nghệ",
+      "position": "Quản Trị Cơ Sở Dữ Liệu",
+      "hire_date": "2022-03-20",
+      "vpn_ip": "10.0.0.105",
+      "totp_enabled": true,
+      "status": "active",
+      "last_login": "2025-12-19T11:30:00Z",
+      "vpn_status": "connected",
+      "allowed_resources": [
+        "database-cluster (10.0.0.70)",
+        "backup-server (10.0.0.71)",
+        "monitoring-system (10.0.0.72)"
+      ]
+    },
+    {
+      "id": 7,
+      "username": "mai1",
+      "email": "mai1@gmail.com",
+      "password": "password123",
+      "name": "Võ Thị Mai",
+      "role": "nhan_vien",
+      "department": "Phòng Marketing",
+      "position": "Nhân Viên Marketing",
+      "hire_date": "2023-08-01",
+      "vpn_ip": "10.0.0.106",
+      "totp_enabled": true,
+      "status": "active",
+      "last_login": "2025-12-19T09:00:00Z",
+      "vpn_status": "connected",
+      "allowed_resources": [
+        "crm-system (10.0.0.80)",
+        "marketing-tools (10.0.0.81)"
+      ]
+    },
+    {
+      "id": 8,
+      "username": "hung1",
+      "email": "hung1@gmail.com",
+      "password": "password123",
+      "name": "Võ Thanh Hùng",
+      "role": "nhan_vien",
+      "department": "Phòng Công Nghệ",
+      "position": "Cựu Nhân Viên",
+      "hire_date": "2021-05-10",
+      "termination_date": "2023-12-31",
+      "vpn_ip": null,
+      "totp_enabled": false,
+      "status": "revoked",
+      "last_login": "2023-12-30T17:00:00Z",
+      "vpn_status": "revoked",
+      "allowed_resources": []
     }
   ]
 }
