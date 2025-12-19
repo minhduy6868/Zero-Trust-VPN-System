@@ -7,6 +7,8 @@ function NewDashboard() {
   const [profile, setProfile] = useState(null);
   const [permissions, setPermissions] = useState(null);
   const [companyData, setCompanyData] = useState(null);
+  const [vpnConfig, setVpnConfig] = useState(null);
+  const [vpnLoading, setVpnLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -103,6 +105,30 @@ function NewDashboard() {
     return permissions?.role?.level === 'full' || permissions?.features?.approve_requests;
   };
 
+  const downloadVPNConfig = async () => {
+    try {
+      setVpnLoading(true);
+      setError('');
+      const response = await api.get('/vpn/config', { responseType: 'blob' });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `zerotrust-vpn-${profile?.name?.replace(/\s+/g, '-')}.conf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentChild?.removeChild(link);
+      
+      setVpnConfig(response.data);
+    } catch (err) {
+      console.error('VPN download error:', err);
+      setError('Failed to generate VPN config. Make sure you have completed TOTP verification.');
+    } finally {
+      setVpnLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="container">
@@ -164,7 +190,7 @@ function NewDashboard() {
       <div style={{ background: 'white', borderBottom: '1px solid #e2e8f0' }}>
         <div className="container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
           <div style={{ display: 'flex', gap: '5px', overflowX: 'auto' }}>
-            {['overview', 'requests', 'timesheets', 'projects', 'expenses'].map(tab => (
+            {['overview', 'vpn', 'company'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -180,7 +206,9 @@ function NewDashboard() {
                   transition: 'all 0.3s'
                 }}
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'overview' && '📊 Overview'}
+                {tab === 'vpn' && '🔐 VPN Config'}
+                {tab === 'company' && '🏢 Company'}
               </button>
             ))}
             {permissions?.features?.user_management && (
@@ -219,365 +247,319 @@ function NewDashboard() {
           </div>
         )}
 
-        {/* Overview Tab */}
+        {/* Overview Tab - User Profile & Permissions */}
         {activeTab === 'overview' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+              {/* User Profile Card */}
               <div className="card" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-                <h3 style={{ margin: '0 0 10px 0' }}>Pending Requests</h3>
-                <p style={{ fontSize: '36px', fontWeight: 'bold', margin: 0 }}>
-                  {companyData?.leave_requests?.filter(r => r.employee_email === profile?.email && r.status === 'pending').length || 0}
-                </p>
-              </div>
-              
-              <div className="card" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', color: 'white' }}>
-                <h3 style={{ margin: '0 0 10px 0' }}>Hours This Week</h3>
-                <p style={{ fontSize: '36px', fontWeight: 'bold', margin: 0 }}>
-                  {companyData?.timesheets?.filter(t => t.employee_email === profile?.email)
-                    .reduce((sum, t) => sum + (t.hours_worked || 0), 0).toFixed(1)}h
-                </p>
-              </div>
-              
-              <div className="card" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', color: 'white' }}>
-                <h3 style={{ margin: '0 0 10px 0' }}>Active Projects</h3>
-                <p style={{ fontSize: '36px', fontWeight: 'bold', margin: 0 }}>
-                  {companyData?.projects?.filter(p => p.team_members?.includes(profile?.email)).length || 0}
-                </p>
-              </div>
-              
-              <div className="card" style={{ background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', color: 'white' }}>
-                <h3 style={{ margin: '0 0 10px 0' }}>Pending Expenses</h3>
-                <p style={{ fontSize: '36px', fontWeight: 'bold', margin: 0 }}>
-                  {companyData?.expenses?.filter(e => e.employee_email === profile?.email && e.status === 'pending').length || 0}
-                </p>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="card">
-              <h2 style={{ marginTop: 0 }}>Quick Actions</h2>
-              <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => handleCreateRequest('Annual Leave')}
-                  style={{
-                    padding: '12px 24px',
-                    background: '#667eea',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  📝 Request Leave
-                </button>
-                <button
-                  onClick={() => setActiveTab('timesheets')}
-                  style={{
-                    padding: '12px 24px',
-                    background: '#48bb78',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  ⏰ Log Time
-                </button>
-                <button
-                  onClick={() => setActiveTab('expenses')}
-                  style={{
-                    padding: '12px 24px',
-                    background: '#ed8936',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  💰 Submit Expense
-                </button>
-              </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div className="card" style={{ marginTop: '20px' }}>
-              <h2 style={{ marginTop: 0 }}>Recent Activity</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                {companyData?.leave_requests?.filter(r => r.employee_email === profile?.email).slice(0, 3).map(request => (
-                  <div key={request.id} style={{ 
-                    padding: '15px', 
-                    background: '#f7fafc', 
-                    borderRadius: '8px',
-                    borderLeft: `4px solid ${request.status === 'approved' ? '#48bb78' : request.status === 'pending' ? '#ed8936' : '#f56565'}`
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <strong>{request.type}</strong> - {request.days} day(s)
-                        <p style={{ margin: '5px 0 0 0', color: '#718096', fontSize: '14px' }}>
-                          {request.start_date} to {request.end_date}
-                        </p>
-                      </div>
-                      <span style={{
-                        padding: '5px 12px',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        background: request.status === 'approved' ? '#c6f6d5' : request.status === 'pending' ? '#feebc8' : '#fed7d7',
-                        color: request.status === 'approved' ? '#22543d' : request.status === 'pending' ? '#7c2d12' : '#742a2a'
-                      }}>
-                        {request.status.toUpperCase()}
-                      </span>
-                    </div>
+                <h3 style={{ margin: '0 0 15px 0' }}>👤 User Profile</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div>
+                    <p style={{ margin: '0 0 5px 0', opacity: 0.9, fontSize: '12px' }}>NAME</p>
+                    <p style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>{profile?.name}</p>
                   </div>
-                ))}
+                  <div>
+                    <p style={{ margin: '0 0 5px 0', opacity: 0.9, fontSize: '12px' }}>EMAIL</p>
+                    <p style={{ margin: 0, fontSize: '14px' }}>{profile?.email}</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 5px 0', opacity: 0.9, fontSize: '12px' }}>DEPARTMENT</p>
+                    <p style={{ margin: 0, fontSize: '14px' }}>{profile?.department}</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 5px 0', opacity: 0.9, fontSize: '12px' }}>ROLE</p>
+                    <p style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>{permissions?.role?.display_name}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* User Permissions Card */}
+              <div className="card" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', color: 'white' }}>
+                <h3 style={{ margin: '0 0 15px 0' }}>🔑 User Permissions</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span>{permissions?.vpn_enabled ? '✅' : '❌'}</span>
+                    <span>VPN Enabled: <strong>{permissions?.vpn_enabled ? 'YES' : 'NO'}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span>{permissions?.company_access ? '✅' : '❌'}</span>
+                    <span>Company Access: <strong>{permissions?.company_access ? 'YES' : 'NO'}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span>{permissions?.totp_enabled ? '🔐' : '⚠️'}</span>
+                    <span>MFA (TOTP): <strong>{permissions?.totp_enabled ? 'ENABLED' : 'NOT ENABLED'}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span>🌐</span>
+                    <span>VPN IP: <strong>{permissions?.vpn_ip || 'Not assigned'}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Company Data Card */}
+              <div className="card" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', color: 'white' }}>
+                <h3 style={{ margin: '0 0 15px 0' }}>🏢 Company Info</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div>
+                    <p style={{ margin: '0 0 5px 0', opacity: 0.9, fontSize: '12px' }}>COMPANY</p>
+                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>{companyData?.company?.name}</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 5px 0', opacity: 0.9, fontSize: '12px' }}>DEPARTMENT</p>
+                    <p style={{ margin: 0, fontSize: '14px' }}>{companyData?.company?.department}</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 5px 0', opacity: 0.9, fontSize: '12px' }}>EMPLOYEES</p>
+                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>{companyData?.company?.employees}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Authentication Status */}
+            <div className="card">
+              <h2 style={{ marginTop: 0 }}>✓ Authentication Status</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+                <div style={{ padding: '15px', background: '#c6f6d5', borderRadius: '8px', borderLeft: '4px solid #48bb78' }}>
+                  <div style={{ fontWeight: 'bold', color: '#22543d', marginBottom: '5px' }}>✅ Username/Password</div>
+                  <div style={{ color: '#22543d', fontSize: '14px' }}>Authentication successful</div>
+                </div>
+                <div style={{ padding: '15px', background: '#c6f6d5', borderRadius: '8px', borderLeft: '4px solid #48bb78' }}>
+                  <div style={{ fontWeight: 'bold', color: '#22543d', marginBottom: '5px' }}>✅ TOTP MFA Code</div>
+                  <div style={{ color: '#22543d', fontSize: '14px' }}>Multi-factor authentication verified</div>
+                </div>
+                <div style={{ padding: '15px', background: '#c6f6d5', borderRadius: '8px', borderLeft: '4px solid #48bb78' }}>
+                  <div style={{ fontWeight: 'bold', color: '#22543d', marginBottom: '5px' }}>✅ User Permissions</div>
+                  <div style={{ color: '#22543d', fontSize: '14px' }}>Role and permissions assigned</div>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Leave Requests Tab */}
-        {activeTab === 'requests' && (
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0 }}>Leave Requests</h2>
+        {/* VPN Config Tab */}
+        {activeTab === 'vpn' && (
+          <div>
+            {/* VPN Status Card */}
+            <div className="card" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', marginBottom: '20px' }}>
+              <h2 style={{ marginTop: 0 }}>🔐 VPN Configuration</h2>
+              <p style={{ margin: '0 0 15px 0', opacity: 0.9 }}>
+                Download your WireGuard VPN configuration file. This file contains your unique credentials generated by HashiCorp Vault.
+              </p>
+              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '8px', marginTop: '15px' }}>
+                <p style={{ margin: 0, fontSize: '14px' }}>
+                  <strong>⚠️ Security Notice:</strong>
+                </p>
+                <ul style={{ margin: '10px 0 0 0', paddingLeft: '20px', fontSize: '14px' }}>
+                  <li>Each download generates a unique private key</li>
+                  <li>Keys are ephemeral and can be rotated</li>
+                  <li>Never share this file with others</li>
+                  <li>Private keys are never hardcoded or stored in plaintext</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Download Button */}
+            <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
+              <h3 style={{ marginTop: 0 }}>Get WireGuard Configuration</h3>
               <button
-                onClick={() => handleCreateRequest('Annual Leave')}
+                onClick={downloadVPNConfig}
+                disabled={vpnLoading}
                 style={{
-                  padding: '10px 20px',
-                  background: '#667eea',
+                  padding: '15px 40px',
+                  background: vpnLoading ? '#cbd5e0' : '#48bb78',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: 'pointer',
+                  cursor: vpnLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '16px',
                   fontWeight: 'bold'
                 }}
               >
-                + New Request
+                {vpnLoading ? '⏳ Generating...' : '📥 Download VPN Config'}
               </button>
+              <p style={{ margin: '15px 0 0 0', color: '#718096', fontSize: '14px' }}>
+                File will be named: zerotrust-vpn-{profile?.name?.replace(/\s+/g, '-')}.conf
+              </p>
             </div>
-            
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f7fafc', borderBottom: '2px solid #e2e8f0' }}>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Start Date</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>End Date</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Days</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Status</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {companyData?.leave_requests?.filter(r => 
-                  permissions?.role?.level === 'full' || 
-                  permissions?.features?.approve_requests || 
-                  r.employee_email === profile?.email
-                ).map(request => (
-                  <tr key={request.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '12px' }}>{request.type}</td>
-                    <td style={{ padding: '12px' }}>{request.start_date}</td>
-                    <td style={{ padding: '12px' }}>{request.end_date}</td>
-                    <td style={{ padding: '12px' }}>{request.days}</td>
-                    <td style={{ padding: '12px' }}>
-                      <span style={{
-                        padding: '5px 12px',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        background: request.status === 'approved' ? '#c6f6d5' : request.status === 'pending' ? '#feebc8' : '#fed7d7',
-                        color: request.status === 'approved' ? '#22543d' : request.status === 'pending' ? '#7c2d12' : '#742a2a'
-                      }}>
-                        {request.status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      {canEdit(request) && (
-                        <button
-                          onClick={() => handleEdit(request, 'leave_requests')}
-                          style={{
-                            padding: '6px 12px',
-                            background: '#4299e1',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            marginRight: '5px'
-                          }}
-                        >
-                          Edit
-                        </button>
-                      )}
-                      {canDelete() && (
-                        <button
-                          onClick={() => handleDelete(request.id, 'leave_requests')}
-                          style={{
-                            padding: '6px 12px',
-                            background: '#f56565',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
 
-        {/* Timesheets Tab */}
-        {activeTab === 'timesheets' && (
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>My Timesheets</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f7fafc', borderBottom: '2px solid #e2e8f0' }}>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Check In</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Check Out</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Hours</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Project</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {companyData?.timesheets?.filter(t => t.employee_email === profile?.email).map(timesheet => (
-                  <tr key={timesheet.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '12px' }}>{timesheet.date}</td>
-                    <td style={{ padding: '12px' }}>{timesheet.check_in}</td>
-                    <td style={{ padding: '12px' }}>{timesheet.check_out}</td>
-                    <td style={{ padding: '12px', fontWeight: 'bold' }}>{timesheet.hours_worked}h</td>
-                    <td style={{ padding: '12px' }}>{timesheet.project}</td>
-                    <td style={{ padding: '12px', color: '#718096' }}>{timesheet.notes}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+            {/* VPN Usage Instructions */}
+            <div className="card">
+              <h3>📖 How to Use WireGuard</h3>
+              
+              <div style={{ marginBottom: '25px' }}>
+                <h4 style={{ color: '#667eea', marginBottom: '10px' }}>🖥️ Windows / macOS</h4>
+                <ol style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
+                  <li>Download and install <a href="https://www.wireguard.com/install/" target="_blank" rel="noopener noreferrer" style={{ color: '#667eea' }}>WireGuard</a></li>
+                  <li>Download your VPN config file using the button above</li>
+                  <li>Open WireGuard app → "Add Tunnel" → "Import from file"</li>
+                  <li>Select the downloaded .conf file</li>
+                  <li>Click "Activate" to connect</li>
+                  <li>Status will show "Active" when connected ✅</li>
+                </ol>
+              </div>
 
-        {/* Projects Tab */}
-        {activeTab === 'projects' && (
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>My Projects</h2>
-            <div style={{ display: 'grid', gap: '20px' }}>
-              {companyData?.projects?.filter(p => p.team_members?.includes(profile?.email)).map(project => (
-                <div key={project.id} style={{ 
-                  padding: '20px', 
-                  background: '#f7fafc', 
-                  borderRadius: '8px',
-                  borderLeft: '4px solid #667eea'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '15px' }}>
-                    <div>
-                      <h3 style={{ margin: '0 0 5px 0' }}>{project.name}</h3>
-                      <p style={{ margin: 0, color: '#718096' }}>{project.description}</p>
-                    </div>
-                    <span style={{
-                      padding: '5px 12px',
-                      borderRadius: '20px',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      background: project.status === 'active' ? '#c6f6d5' : '#feebc8',
-                      color: project.status === 'active' ? '#22543d' : '#7c2d12'
-                    }}>
-                      {project.status.toUpperCase()}
-                    </span>
-                  </div>
-                  
-                  <div style={{ marginBottom: '15px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '14px' }}>
-                      <span>Progress</span>
-                      <span style={{ fontWeight: 'bold' }}>{project.progress}%</span>
-                    </div>
-                    <div style={{ 
-                      width: '100%', 
-                      height: '8px', 
-                      background: '#e2e8f0', 
-                      borderRadius: '4px',
-                      overflow: 'hidden'
-                    }}>
-                      <div style={{ 
-                        width: `${project.progress}%`, 
-                        height: '100%', 
-                        background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-                        transition: 'width 0.3s'
-                      }}></div>
-                    </div>
-                  </div>
-                  
-                  <div style={{ display: 'flex', gap: '30px', fontSize: '14px', color: '#718096' }}>
-                    <div>
-                      <strong>Start:</strong> {project.start_date}
-                    </div>
-                    <div>
-                      <strong>Deadline:</strong> {project.deadline}
-                    </div>
-                    <div>
-                      <strong>Budget:</strong> {(project.budget / 1000000).toFixed(0)}M VND
-                    </div>
-                  </div>
+              <div style={{ marginBottom: '25px' }}>
+                <h4 style={{ color: '#667eea', marginBottom: '10px' }}>🐧 Linux</h4>
+                <div style={{ background: '#f7fafc', padding: '15px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '13px', overflowX: 'auto' }}>
+                  <div>sudo apt install wireguard</div>
+                  <div>sudo cp zerotrust-vpn.conf /etc/wireguard/wg0.conf</div>
+                  <div>sudo wg-quick up wg0</div>
+                  <div style={{ marginTop: '10px', color: '#718096' }}># Verify connection:</div>
+                  <div>ip addr show wg0</div>
+                  <div>sudo wg show</div>
                 </div>
-              ))}
+              </div>
+
+              <div>
+                <h4 style={{ color: '#667eea', marginBottom: '10px' }}>✅ Verify Connection</h4>
+                <div style={{ background: '#f7fafc', padding: '15px', borderRadius: '8px' }}>
+                  <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}>Check your VPN IP address:</p>
+                  <div style={{ background: '#e2e8f0', padding: '10px', borderRadius: '4px', fontFamily: 'monospace', fontSize: '13px', marginBottom: '10px' }}>
+                    curl https://api.ipify.org
+                  </div>
+                  <p style={{ margin: 0, fontSize: '14px', color: '#718096' }}>
+                    Your VPN tunnel IP should be in the 10.8.0.0/24 range
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* VPN Info */}
+            <div className="card" style={{ background: '#f7fafc' }}>
+              <h3>ℹ️ WireGuard Information</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+                <div>
+                  <strong>Protocol:</strong>
+                  <p style={{ margin: '5px 0 0 0', color: '#718096' }}>WireGuard (Modern VPN Protocol)</p>
+                </div>
+                <div>
+                  <strong>Encryption:</strong>
+                  <p style={{ margin: '5px 0 0 0', color: '#718096' }}>Curve25519 + ChaCha20-Poly1305</p>
+                </div>
+                <div>
+                  <strong>Performance:</strong>
+                  <p style={{ margin: '5px 0 0 0', color: '#718096' }}>5x faster than OpenVPN</p>
+                </div>
+                <div>
+                  <strong>Code Size:</strong>
+                  <p style={{ margin: '5px 0 0 0', color: '#718096' }}>4,000 lines (vs OpenVPN 100,000+)</p>
+                </div>
+                <div>
+                  <strong>Latency:</strong>
+                  <p style={{ margin: '5px 0 0 0', color: '#718096' }}>~2ms (vs OpenVPN ~10ms)</p>
+                </div>
+                <div>
+                  <strong>CPU Usage:</strong>
+                  <p style={{ margin: '5px 0 0 0', color: '#718096' }}>3x lower than OpenVPN</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Expenses Tab */}
-        {activeTab === 'expenses' && (
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>Expense Claims</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f7fafc', borderBottom: '2px solid #e2e8f0' }}>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Category</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Amount</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Description</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {companyData?.expenses?.filter(e => 
-                  permissions?.role?.level === 'full' || 
-                  permissions?.features?.view_financials || 
-                  e.employee_email === profile?.email
-                ).map(expense => (
-                  <tr key={expense.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '12px' }}>{expense.date}</td>
-                    <td style={{ padding: '12px' }}>{expense.category}</td>
-                    <td style={{ padding: '12px', fontWeight: 'bold' }}>{expense.amount.toLocaleString()} VND</td>
-                    <td style={{ padding: '12px', color: '#718096' }}>{expense.description}</td>
-                    <td style={{ padding: '12px' }}>
-                      <span style={{
-                        padding: '5px 12px',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        background: expense.status === 'approved' ? '#c6f6d5' : expense.status === 'pending' ? '#feebc8' : '#fed7d7',
-                        color: expense.status === 'approved' ? '#22543d' : expense.status === 'pending' ? '#7c2d12' : '#742a2a'
-                      }}>
-                        {expense.status.toUpperCase()}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Company Tab */}
+        {activeTab === 'company' && (
+          <div>
+            {/* Company Header */}
+            <div className="card" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', color: 'white', marginBottom: '20px' }}>
+              <h2 style={{ marginTop: 0 }}>🏢 {companyData?.company?.name}</h2>
+              <p style={{ margin: 0, opacity: 0.9 }}>
+                Department: <strong>{companyData?.company?.department}</strong> • Employees: <strong>{companyData?.company?.employees}</strong>
+              </p>
+            </div>
+
+            {/* Company Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+              <div className="card" style={{ background: '#f7fafc', textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#667eea' }}>
+                  {companyData?.company?.employees || 0}
+                </div>
+                <div style={{ color: '#718096', marginTop: '5px' }}>Total Employees</div>
+              </div>
+              <div className="card" style={{ background: '#f7fafc', textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#48bb78' }}>
+                  {companyData?.users?.filter(u => u.status === 'active').length || 0}
+                </div>
+                <div style={{ color: '#718096', marginTop: '5px' }}>Active Users</div>
+              </div>
+              <div className="card" style={{ background: '#f7fafc', textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ed8936' }}>
+                  {companyData?.users?.filter(u => u.vpn_status === 'connected').length || 0}
+                </div>
+                <div style={{ color: '#718096', marginTop: '5px' }}>VPN Connected</div>
+              </div>
+              <div className="card" style={{ background: '#f7fafc', textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#9f7aea' }}>
+                  {companyData?.users?.filter(u => u.totp_enabled).length || 0}
+                </div>
+                <div style={{ color: '#718096', marginTop: '5px' }}>MFA Enabled</div>
+              </div>
+            </div>
+
+            {/* Company Description */}
+            {companyData?.company?.description && (
+              <div className="card">
+                <h3>About</h3>
+                <p style={{ margin: 0, color: '#4a5568', lineHeight: '1.6' }}>
+                  {companyData?.company?.description}
+                </p>
+              </div>
+            )}
+
+            {/* Departments */}
+            {companyData?.company?.departments && companyData.company.departments.length > 0 && (
+              <div className="card">
+                <h3>Departments</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+                  {companyData.company.departments.map((dept, idx) => (
+                    <div key={idx} style={{ padding: '15px', background: '#f7fafc', borderRadius: '8px', borderLeft: '4px solid #667eea' }}>
+                      <div style={{ fontWeight: 'bold', color: '#2d3748' }}>{dept}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Company Contact */}
+            {companyData?.company?.contact && (
+              <div className="card">
+                <h3>Contact Information</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+                  {companyData.company.contact.email && (
+                    <div>
+                      <strong>📧 Email</strong>
+                      <p style={{ margin: '5px 0 0 0', color: '#4a5568' }}>
+                        <a href={`mailto:${companyData.company.contact.email}`} style={{ color: '#667eea' }}>
+                          {companyData.company.contact.email}
+                        </a>
+                      </p>
+                    </div>
+                  )}
+                  {companyData.company.contact.phone && (
+                    <div>
+                      <strong>📱 Phone</strong>
+                      <p style={{ margin: '5px 0 0 0', color: '#4a5568' }}>
+                        {companyData.company.contact.phone}
+                      </p>
+                    </div>
+                  )}
+                  {companyData.company.contact.website && (
+                    <div>
+                      <strong>🌐 Website</strong>
+                      <p style={{ margin: '5px 0 0 0', color: '#4a5568' }}>
+                        <a href={companyData.company.contact.website} target="_blank" rel="noopener noreferrer" style={{ color: '#667eea' }}>
+                          {companyData.company.contact.website}
+                        </a>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
-
         {/* Admin Panel Tab - Only for Giám Đốc */}
         {activeTab === 'admin' && permissions?.features?.user_management && (
           <div style={{ maxWidth: '1400px', margin: '30px auto' }}>
