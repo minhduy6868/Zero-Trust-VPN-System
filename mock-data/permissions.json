@@ -212,6 +212,28 @@
         "status": "pending",
         "submitted_date": "2025-12-19",
         "type": "annual"
+      },
+      {
+        "employee_email": "zerotrust@gmail.com",
+        "type": "Annual Leave",
+        "start_date": "2025-12-19",
+        "end_date": "2025-12-19",
+        "days": 1,
+        "reason": "",
+        "status": "pending",
+        "submitted_date": "2025-12-19",
+        "id": "LE002"
+      },
+      {
+        "employee_email": "zerotrust@gmail.com",
+        "type": "Annual Leave",
+        "start_date": "2025-12-19",
+        "end_date": "2025-12-19",
+        "days": 1,
+        "reason": "",
+        "status": "pending",
+        "submitted_date": "2025-12-19",
+        "id": "LE003"
       }
     ],
     "timesheets": [
