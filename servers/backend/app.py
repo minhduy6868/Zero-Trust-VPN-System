@@ -19,6 +19,7 @@ from io import BytesIO
 from datetime import datetime, timedelta
 import base64
 import hashlib
+import subprocess
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -385,42 +386,114 @@ def _get_wireguard_config_impl(username, mfa_token=None):
     
     logger.info(f"Fetching WireGuard config for user: {username}")
     
+    # Get user role and permissions
     try:
+        with open('/app/mock-data/permissions.json', 'r') as f:
+            permissions_data = json.load(f)
+        user_role = permissions_data['user_role_mapping'].get(username, 'nhan_vien')
+        role_info = permissions_data['roles'].get(user_role, {})
+        vpn_access = role_info.get('vpn_access', 'basic')
+    except Exception as e:
+        logger.warning(f"Failed to get role info: {e}")
+        user_role = 'nhan_vien'
+        vpn_access = 'basic'
+    
+    # Configure AllowedIPs based on role
+    if vpn_access == 'priority' or user_role == 'giam_doc':
+        # Full access to all internal networks
+        allowed_ips = "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16"
+        dns_servers = "1.1.1.1, 8.8.8.8"
+        access_note = "Full Network Access (All Subnets)"
+    elif vpn_access == 'full' or user_role == 'quan_ly':
+        # Manager access - most internal networks
+        allowed_ips = "10.0.0.0/16, 10.1.0.0/16"
+        dns_servers = "1.1.1.1"
+        access_note = "Manager Access (Extended)"
+    else:
+        # Basic employee access - limited subnets
+        allowed_ips = "10.0.0.0/24"
+        dns_servers = "1.1.1.1"
+        access_note = "Employee Access (Limited)"
+    
+    # Generate REAL WireGuard keys for demo
+    try:
+        # Try to get from Vault first
         secret = vault_client.secrets.kv.v2.read_secret_version(path=f"wireguard/{username}")
         config_data = secret['data']['data']
+        logger.info(f"Using existing keys from Vault for {username}")
     except Exception as e:
-        logger.error(f"Failed to read from Vault: {e}")
-        # Generate sample config for demo (if not in vault)
+        logger.info(f"Generating new WireGuard keys for {username}")
+        
+        # Generate real client private key
+        client_private = subprocess.run(['wg', 'genkey'], capture_output=True, text=True).stdout.strip()
+        # Generate client public key from private key
+        client_public = subprocess.run(['wg', 'pubkey'], input=client_private, capture_output=True, text=True).stdout.strip()
+        
+        # Get server public key from Vault (or generate if not exists)
+        try:
+            server_secret = vault_client.secrets.kv.v2.read_secret_version(path='wireguard/server')
+            server_public_key = server_secret['data']['data']['public_key']
+        except:
+            # Generate server keys if not exist
+            server_private = subprocess.run(['wg', 'genkey'], capture_output=True, text=True).stdout.strip()
+            server_public_key = subprocess.run(['wg', 'pubkey'], input=server_private, capture_output=True, text=True).stdout.strip()
+            # Store server keys in Vault
+            try:
+                vault_client.secrets.kv.v2.create_or_update_secret(
+                    path='wireguard/server',
+                    secret=dict(private_key=server_private, public_key=server_public_key)
+                )
+            except:
+                pass
+        
         config_data = {
-            'private_key': 'YIrZzJjw5DHwMsgV5YwKRlwMsgV5YwKRlwMsgV5DA4=',
+            'private_key': client_private,
             'address': f'10.8.0.{hash(username) % 200 + 2}/24',
-            'dns': '1.1.1.1',
-            'server_public_key': 'u4S0E5T8w/pA5fW9x/qK2mL3nP0sR7tU/vW1yZ2aB3=',
+            'dns': dns_servers,
+            'server_public_key': server_public_key,
             'endpoint': f'{os.getenv("SERVER_IP", "192.168.1.9")}:51820'
         }
+        
+        # Store client keys in Vault for reuse
+        try:
+            vault_client.secrets.kv.v2.create_or_update_secret(
+                path=f'wireguard/{username}',
+                secret=config_data
+            )
+        except Exception as ve:
+            logger.warning(f"Failed to store keys in Vault: {ve}")
     
     # Generate WireGuard config file
     wg_config = f"""[Interface]
 PrivateKey = {config_data['private_key']}
 Address = {config_data['address']}
-DNS = {config_data.get('dns', '1.1.1.1')}
+DNS = {dns_servers}
 
 [Peer]
 PublicKey = {config_data['server_public_key']}
 Endpoint = {config_data['endpoint']}
-AllowedIPs = 10.0.0.0/8
+AllowedIPs = {allowed_ips}
 PersistentKeepalive = 25
 
+# ═══════════════════════════════════════
+# Zero Trust VPN Configuration
+# ═══════════════════════════════════════
 # User: {username}
+# Role: {user_role.upper()} ({role_info.get('display_name', 'N/A')})
+# Access Level: {access_note}
 # Generated: {datetime.now().isoformat()}
 # MFA: Verified ✓
+# ═══════════════════════════════════════
 """
     
-    log_access(username, "wireguard_config", "success")
+    log_access(username, "wireguard_config", "success", f"Role: {user_role}, Access: {vpn_access}")
     
     return {
         "config": wg_config,
         "username": username,
+        "role": user_role,
+        "vpn_access": vpn_access,
+        "allowed_networks": allowed_ips,
         "address": config_data['address'],
         "endpoint": config_data['endpoint']
     }, 200
@@ -480,20 +553,32 @@ def get_vpn_config():
 def get_profile():
     """Get user profile"""
     try:
-        username = request.user_info.get('preferred_username', request.user_info.get('email'))
+        email = request.user_info.get('email')
+        preferred_username = request.user_info.get('preferred_username', request.user_info.get('sub'))
+        username = email if email else preferred_username
         
-        # Load permissions data
-        with open('/app/mock-data/permissions.json', 'r') as f:
+        # Load permissions and company data
+        with open('/app/mock-data/permissions.json', 'r', encoding='utf-8') as f:
             permissions_data = json.load(f)
         
-        # Get user's role
-        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
+        # Get user's role - try both email and preferred_username
+        user_role_mapping = permissions_data.get('user_role_mapping', {})
+        user_role = user_role_mapping.get(username) or user_role_mapping.get(preferred_username) or permissions_data.get('default_role', 'nhan_vien')
         role_info = permissions_data['roles'].get(user_role, {})
         
+        # Get department from company_data
+        department = None
+        company_employees = permissions_data.get('company_data', {}).get('employees', [])
+        for emp in company_employees:
+            if emp.get('email') == email or emp.get('email') == username:
+                department = emp.get('department')
+                break
+        
         return jsonify({
-            "username": username,
-            "email": request.user_info.get('email', username),
-            "name": request.user_info.get('name', username.split('@')[0].title()),
+            "username": preferred_username,
+            "email": email or username,
+            "name": request.user_info.get('name', preferred_username.split('@')[0].title()),
+            "department": department or "Engineering",
             "role": user_role,
             "role_display": role_info.get('display_name', 'Employee'),
             "level": role_info.get('level', 'limited')
@@ -509,17 +594,20 @@ def get_profile():
 def get_permissions():
     """Get user permissions from mock data"""
     try:
-        username = request.user_info.get('preferred_username', request.user_info.get('email'))
+        # Use email for role mapping (more reliable than preferred_username)
+        email = request.user_info.get('email')
+        preferred_username = request.user_info.get('preferred_username', request.user_info.get('sub'))
+        username = email if email else preferred_username
         
-        logger.info(f"Getting permissions for user: {username}")
+        logger.info(f"Getting permissions for user: {username} (email: {email}, preferred_username: {preferred_username})")
         
         # Load permissions data
         with open('/app/mock-data/permissions.json', 'r', encoding='utf-8') as f:
             permissions_data = json.load(f)
         
-        # Get user's role
+        # Get user's role - try both email and preferred_username
         user_role_mapping = permissions_data.get('user_role_mapping', {})
-        user_role = user_role_mapping.get(username, permissions_data.get('default_role', 'nhan_vien'))
+        user_role = user_role_mapping.get(username) or user_role_mapping.get(preferred_username) or permissions_data.get('default_role', 'nhan_vien')
         
         logger.info(f"User {username} has role: {user_role}")
         
@@ -530,7 +618,8 @@ def get_permissions():
         vpn_access_level = role_permissions.get('vpn_access', 'none')
         vpn_enabled = vpn_access_level in ['basic', 'full', 'priority']
         company_access = user_role in ['quan_ly', 'giam_doc']  # Manager and above
-        totp_enabled = redis_client.get(f"totp_setup_completed:{username}")
+        # Check TOTP using preferred_username (as Redis stores it that way)
+        totp_enabled = redis_client.get(f"totp_setup_completed:{preferred_username}")
         
         logger.info(f"VPN enabled: {vpn_enabled}, Company access: {company_access}")
         
@@ -674,7 +763,10 @@ def list_users():
         user_role = permissions_data['user_role_mapping'].get(username, 'employee')
         role_info = permissions_data['roles'].get(user_role, {})
         
+        logger.info(f"list_users: username={username}, role={user_role}, has_user_mgmt={role_info.get('features', {}).get('user_management')}")
+        
         if not role_info.get('features', {}).get('user_management'):
+            logger.warning(f"Access denied for {username}: user_management permission required")
             return jsonify({"error": "Unauthorized"}), 403
         
         # Load users from mock data
@@ -707,13 +799,114 @@ def create_user():
         email = data.get('email')
         password = data.get('password')
         role = data.get('role', 'employee')
+        full_name = data.get('name', email.split('@')[0])
+        department = data.get('department', 'General')
+        position = data.get('position', 'Staff')
         
         if not email or not password:
             return jsonify({"error": "Email and password required"}), 400
         
-        # In production, this would create user in Keycloak
-        # For now, return success
+        # Split full name
+        name_parts = full_name.split(' ')
+        first_name = ' '.join(name_parts[:-1]) if len(name_parts) > 1 else full_name
+        last_name = name_parts[-1] if len(name_parts) > 1 else ''
+        
+        # Create user in Keycloak
+        try:
+            # Get admin token
+            token_resp = requests.post(
+                f"{KEYCLOAK_ADDR}/realms/master/protocol/openid-connect/token",
+                data={
+                    "client_id": "admin-cli",
+                    "username": "admin",
+                    "password": "admin123",
+                    "grant_type": "password"
+                },
+                timeout=5
+            )
+            
+            if token_resp.status_code != 200:
+                return jsonify({"error": "Failed to authenticate with Keycloak"}), 500
+            
+            admin_token = token_resp.json()["access_token"]
+            
+            # Create user
+            user_resp = requests.post(
+                f"{KEYCLOAK_ADDR}/admin/realms/{KEYCLOAK_REALM}/users",
+                headers={
+                    "Authorization": f"Bearer {admin_token}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "username": email,
+                    "email": email,
+                    "firstName": first_name,
+                    "lastName": last_name,
+                    "enabled": True,
+                    "emailVerified": True,
+                    "credentials": [{
+                        "type": "password",
+                        "value": password,
+                        "temporary": False
+                    }],
+                    "attributes": {
+                        "role": [role],
+                        "position": [position],
+                        "department": [department]
+                    }
+                },
+                timeout=5
+            )
+            
+            if user_resp.status_code not in [201, 409]:
+                logger.error(f"Keycloak user creation failed: {user_resp.status_code} - {user_resp.text}")
+                return jsonify({"error": f"Failed to create user in Keycloak: {user_resp.text}"}), 500
+            
+            if user_resp.status_code == 409:
+                return jsonify({"error": "User already exists"}), 409
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Keycloak connection error: {e}")
+            return jsonify({"error": "Failed to connect to Keycloak"}), 500
+        
+        # Add to users.json
+        try:
+            with open('/app/mock-data/users.json', 'r') as f:
+                users_data = json.load(f)
+            
+            # Get max ID
+            max_id = max([u.get('id', 0) for u in users_data.get('users', [])], default=0)
+            new_id = max_id + 1
+            
+            # Create new user entry
+            new_user = {
+                "id": new_id,
+                "username": email.split('@')[0],
+                "email": email,
+                "password": password,
+                "name": full_name,
+                "role": role,
+                "department": department,
+                "position": position,
+                "hire_date": datetime.now().strftime("%Y-%m-%d"),
+                "vpn_ip": f"10.0.0.{100 + new_id}",
+                "totp_enabled": False,
+                "status": "active",
+                "last_login": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "vpn_status": "not_configured",
+                "allowed_resources": ["dev-server-1 (10.0.0.50)"]
+            }
+            
+            users_data['users'].append(new_user)
+            
+            with open('/app/mock-data/users.json', 'w') as f:
+                json.dump(users_data, f, indent=2, ensure_ascii=False)
+                
+        except Exception as e:
+            logger.warning(f"Failed to update users.json: {e}")
+        
         logger.info(f"Admin {username} created user {email} with role {role}")
+        log_access(username, "create_user", "success", f"Created user {email}")
         
         return jsonify({
             "success": True,
@@ -721,6 +914,9 @@ def create_user():
             "user": {
                 "email": email,
                 "role": role,
+                "name": full_name,
+                "department": department,
+                "position": position,
                 "totp_enabled": False
             }
         })

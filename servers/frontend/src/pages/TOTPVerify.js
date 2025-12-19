@@ -145,7 +145,7 @@ function TOTPVerify() {
             textAlign: 'center'
           }}>
             <p style={{ fontSize: '13px', color: '#22543d', margin: 0 }}>
-              ✅ TOTP configured. Enter code to access dashboard.
+              TOTP configured. Enter code to access dashboard.
             </p>
           </div>
         )}

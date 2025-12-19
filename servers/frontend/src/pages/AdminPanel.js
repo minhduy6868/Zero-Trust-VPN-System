@@ -12,7 +12,10 @@ function AdminPanel() {
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
-    role: 'employee'
+    name: '',
+    department: '',
+    position: '',
+    role: 'nhan_vien'
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -73,11 +76,23 @@ function AdminPanel() {
         return;
       }
 
+      if (!newUser.name || !newUser.department || !newUser.position) {
+        setError('Please fill in all fields');
+        return;
+      }
+
       await api.post('/admin/users', newUser);
       
-      setSuccess(`User ${newUser.email} created successfully`);
+      setSuccess(`User ${newUser.email} created successfully! They can now login.`);
       setShowCreateModal(false);
-      setNewUser({ email: '', password: '', role: 'employee' });
+      setNewUser({ 
+        email: '', 
+        password: '', 
+        name: '',
+        department: '',
+        position: '',
+        role: 'nhan_vien' 
+      });
       loadUsers();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create user');
@@ -120,7 +135,10 @@ function AdminPanel() {
       'manager': '#805ad5',
       'admin': '#e53e3e',
       'contractor': '#dd6b20',
-      'dba': '#38a169'
+      'dba': '#38a169',
+      'nhan_vien': '#3182ce',
+      'quan_ly': '#805ad5',
+      'giam_doc': '#e53e3e'
     };
     return colors[role] || '#718096';
   };
@@ -146,9 +164,9 @@ function AdminPanel() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>👑 Admin Panel</h1>
+        <h1 style={styles.title}>Admin Panel</h1>
         <button onClick={() => navigate('/dashboard')} style={styles.btnSecondary}>
-          ← Back to Dashboard
+          Back to Dashboard
         </button>
       </div>
 
@@ -161,7 +179,7 @@ function AdminPanel() {
           onClick={() => setActiveTab('users')} 
           style={{...styles.tab, ...(activeTab === 'users' ? styles.tabActive : {})}}
         >
-          👥 Users ({users.length})
+          Users ({users.length})
         </button>
         <button 
           onClick={() => setActiveTab('logs')} 
@@ -173,7 +191,7 @@ function AdminPanel() {
           onClick={() => setActiveTab('stats')} 
           style={{...styles.tab, ...(activeTab === 'stats' ? styles.tabActive : {})}}
         >
-          📊 Statistics
+          Statistics
         </button>
       </div>
 
@@ -226,7 +244,7 @@ function AdminPanel() {
                           {user.status}
                         </span>
                         <div style={{fontSize: '11px', color: '#718096', marginTop: '4px'}}>
-                          {user.totp_enabled ? '🔐 TOTP' : '⚠️ No MFA'}
+                          {user.totp_enabled ? 'TOTP' : 'No MFA'}
                         </div>
                         <div style={{fontSize: '11px', color: user.vpn_status === 'connected' ? '#48bb78' : '#718096'}}>
                           VPN: {user.vpn_status || 'N/A'}
@@ -243,14 +261,14 @@ function AdminPanel() {
                             onClick={() => handleRevokeAccess(user)} 
                             style={{...styles.btnSmall, ...styles.btnWarning}}
                           >
-                            🚫 Revoke
+                            Revoke
                           </button>
                         )}
                         <button 
                           onClick={() => handleDeleteUser(user)} 
                           style={{...styles.btnSmall, ...styles.btnDanger}}
                         >
-                          🗑️ Delete
+                          Delete
                         </button>
                       </div>
                     </td>
@@ -268,7 +286,7 @@ function AdminPanel() {
           <div style={styles.cardHeader}>
             <h2>Audit Logs</h2>
             <button onClick={loadLogs} style={styles.btnSecondary}>
-              🔄 Refresh
+              Refresh
             </button>
           </div>
 
@@ -379,37 +397,69 @@ function AdminPanel() {
       {showCreateModal && (
         <div style={styles.modal}>
           <div style={styles.modalContent}>
-            <h2>Create New User</h2>
+            <h2 style={{marginBottom: '20px', color: '#2d3748'}}>Create New User</h2>
+            
+            <label style={styles.label}>Email *</label>
             <input
               type="email"
-              placeholder="Email"
+              placeholder="user@gmail.com"
               value={newUser.email}
               onChange={(e) => setNewUser({...newUser, email: e.target.value})}
               style={styles.input}
             />
+
+            <label style={styles.label}>Password *</label>
             <input
               type="password"
-              placeholder="Password"
+              placeholder="Enter password"
               value={newUser.password}
               onChange={(e) => setNewUser({...newUser, password: e.target.value})}
               style={styles.input}
             />
+
+            <label style={styles.label}>Full Name *</label>
+            <input
+              type="text"
+              placeholder="Nguyễn Văn A"
+              value={newUser.name}
+              onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+              style={styles.input}
+            />
+
+            <label style={styles.label}>Department *</label>
+            <input
+              type="text"
+              placeholder="Phòng Công Nghệ"
+              value={newUser.department}
+              onChange={(e) => setNewUser({...newUser, department: e.target.value})}
+              style={styles.input}
+            />
+
+            <label style={styles.label}>Position *</label>
+            <input
+              type="text"
+              placeholder="Nhân Viên IT"
+              value={newUser.position}
+              onChange={(e) => setNewUser({...newUser, position: e.target.value})}
+              style={styles.input}
+            />
+
+            <label style={styles.label}>Role *</label>
             <select
               value={newUser.role}
               onChange={(e) => setNewUser({...newUser, role: e.target.value})}
               style={styles.input}
             >
-              <option value="employee">Employee</option>
-              <option value="manager">Manager</option>
-              <option value="admin">Admin</option>
-              <option value="contractor">Contractor</option>
-              <option value="dba">DBA</option>
+              <option value="nhan_vien">Nhân viên (Employee)</option>
+              <option value="quan_ly">Quản lý (Manager)</option>
+              <option value="giam_doc">Giám đốc (Director)</option>
             </select>
-            <div style={{display: 'flex', gap: '10px', marginTop: '20px'}}>
-              <button onClick={handleCreateUser} style={styles.btnPrimary}>
-                Create
+
+            <div style={{display: 'flex', gap: '10px', marginTop: '24px'}}>
+              <button onClick={handleCreateUser} style={{...styles.btnPrimary, flex: 1}}>
+                Create User
               </button>
-              <button onClick={() => setShowCreateModal(false)} style={styles.btnSecondary}>
+              <button onClick={() => setShowCreateModal(false)} style={{...styles.btnSecondary, flex: 1}}>
                 Cancel
               </button>
             </div>
@@ -645,6 +695,13 @@ const styles = {
     borderRadius: '8px',
     fontSize: '14px',
     boxSizing: 'border-box'
+  },
+  label: {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#4a5568',
+    marginBottom: '8px'
   },
   error: {
     background: '#fed7d7',

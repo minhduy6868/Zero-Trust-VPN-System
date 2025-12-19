@@ -128,13 +128,18 @@
   },
   "user_role_mapping": {
     "duy1@gmail.com": "nhan_vien",
+    "duy1": "nhan_vien",
     "tham1@gmail.com": "quan_ly",
+    "tham1": "quan_ly",
     "zerotrust@gmail.com": "giam_doc",
+    "zerotrust": "giam_doc",
     "intern1@gmail.com": "nhan_vien",
+    "nv1@gmail.com": "nhan_vien",
     "hr@gmail.com": "quan_ly",
     "dba@gmail.com": "quan_ly",
     "marketing@gmail.com": "nhan_vien",
-    "revoked@gmail.com": "nhan_vien"
+    "revoked@gmail.com": "nhan_vien",
+    "duy22@gmail.com": "nhan_vien"
   },
   "resources": {
     "databases": [
@@ -277,11 +282,6 @@
         "status": "pending"
       }
     ]
-  },
-  "user_role_mapping": {
-    "duy1@gmail.com": "nhan_vien",
-    "tham1@gmail.com": "quan_ly",
-    "zerotrust@gmail.com": "giam_doc"
   },
   "default_role": "nhan_vien"
 }

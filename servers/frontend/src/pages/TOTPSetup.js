@@ -85,7 +85,7 @@ function TOTPSetup() {
   return (
     <div className="container">
       <div className="card" style={{ maxWidth: '500px', margin: '100px auto' }}>
-        <h1 style={{ textAlign: 'center', marginBottom: '10px' }}>📱 Setup TOTP</h1>
+        <h1 style={{ textAlign: 'center', marginBottom: '10px' }}>Setup TOTP</h1>
         <p style={{ textAlign: 'center', marginBottom: '30px', color: '#718096' }}>
           Step 2 of 3: Configure Multi-Factor Authentication
         </p>

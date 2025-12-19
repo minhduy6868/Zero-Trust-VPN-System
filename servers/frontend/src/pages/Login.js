@@ -53,7 +53,7 @@ function Login() {
   return (
     <div className="container">
       <div className="card" style={{ maxWidth: '450px', margin: '100px auto' }}>
-        <h1 style={{ textAlign: 'center', marginBottom: '10px' }}>🔐 Zero-Trust VPN</h1>
+        <h1 style={{ textAlign: 'center', marginBottom: '10px' }}>Zero-Trust VPN</h1>
         <p style={{ textAlign: 'center', marginBottom: '30px', color: '#718096' }}>
           Secure Access with Multi-Factor Authentication
         </p>
@@ -103,9 +103,9 @@ function Login() {
 
         <div style={{ marginTop: '30px', padding: '15px', background: '#f7fafc', borderRadius: '6px' }}>
           <p style={{ fontSize: '14px', marginBottom: '10px' }}><strong>Test Accounts:</strong></p>
-          <p style={{ fontSize: '13px', margin: '5px 0' }}>👤 john@company.com / password123</p>
-          <p style={{ fontSize: '13px', margin: '5px 0' }}>👤 alice@company.com / password123</p>
-          <p style={{ fontSize: '13px', margin: '5px 0' }}>👤 bob@company.com / password123</p>
+          <p style={{ fontSize: '13px', margin: '5px 0' }}>duy1@gmail.com / password123</p>
+          <p style={{ fontSize: '13px', margin: '5px 0' }}>tham1@gmail.com / password123</p>
+          <p style={{ fontSize: '13px', margin: '5px 0' }}>zerotrust@gmail.com / password123</p>
         </div>
       </div>
     </div>

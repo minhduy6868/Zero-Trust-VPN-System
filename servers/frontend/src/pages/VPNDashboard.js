@@ -96,7 +96,7 @@ function VPNDashboard() {
       <div style={styles.header}>
         <div style={styles.headerContent}>
           <div>
-            <h1 style={styles.title}>🔐 Zero-Trust VPN System</h1>
+            <h1 style={styles.title}>Zero-Trust VPN System</h1>
             <p style={styles.subtitle}>
               {profile?.name} • {permissions?.role?.display_name}
             </p>
@@ -120,7 +120,7 @@ function VPNDashboard() {
           onClick={() => setActiveTab('vpn')}
           style={{...styles.tab, ...(activeTab === 'vpn' ? styles.activeTab : {})}}
         >
-          🔐 VPN Connection
+          VPN Connection
         </button>
         <button
           onClick={() => setActiveTab('permissions')}
@@ -132,7 +132,7 @@ function VPNDashboard() {
           onClick={() => setActiveTab('security')}
           style={{...styles.tab, ...(activeTab === 'security' ? styles.activeTab : {})}}
         >
-          🛡️ Security Status
+          Security Status
         </button>
       </div>
 
@@ -145,7 +145,7 @@ function VPNDashboard() {
             {/* VPN Status Card */}
             <div style={styles.vpnCard}>
               <div style={styles.vpnHeader}>
-                <div style={styles.vpnIcon}>🔐</div>
+                <div style={styles.vpnIcon}>VPN</div>
                 <div>
                   <h2 style={styles.vpnTitle}>WireGuard VPN Connection</h2>
                   <p style={styles.vpnSubtitle}>
@@ -154,8 +154,8 @@ function VPNDashboard() {
                              vpnStatus === 'configured' ? '#ed8936' : '#f56565',
                       fontWeight: 'bold'
                     }}>
-                      {vpnStatus === 'connected' ? '🟢 Connected' : 
-                       vpnStatus === 'configured' ? '🟡 Configured' : '⚫ Not Connected'}
+                      {vpnStatus === 'connected' ? 'Connected' : 
+                       vpnStatus === 'configured' ? 'Configured' : 'Not Connected'}
                     </span>
                   </p>
                 </div>
@@ -164,26 +164,56 @@ function VPNDashboard() {
               {!downloadReady ? (
                 <div>
                   <div style={styles.infoBox}>
-                    <h3 style={styles.infoTitle}>🔒 Zero-Trust VPN Protection</h3>
+                    <h3 style={styles.infoTitle}>Zero-Trust VPN Protection</h3>
                     <p style={styles.infoText}>
                       This WireGuard configuration provides:
                     </p>
                     <ul style={styles.featureList}>
-                      <li>✅ End-to-end ChaCha20 encryption</li>
-                      <li>✅ MFA-verified secure tunnel</li>
-                      <li>✅ Policy-based access control (via Vault)</li>
-                      <li>✅ Real-time audit logging</li>
-                      <li>✅ Assigned IP: 10.0.0.x/24</li>
-                      <li>✅ Access Level: {permissions?.role?.vpn_access}</li>
+                      <li>End-to-end ChaCha20 encryption</li>
+                      <li>MFA-verified secure tunnel</li>
+                      <li>Policy-based access control (via Vault)</li>
+                      <li>Real-time audit logging</li>
+                      <li>Assigned IP: 10.0.0.x/24</li>
+                      <li>Access Level: {permissions?.role?.vpn_access}</li>
                     </ul>
                   </div>
 
+                  <div style={styles.infoBox}>
+                    <h3 style={styles.infoTitle}>Network Access by Role</h3>
+                    <table style={styles.accessTable}>
+                      <thead>
+                        <tr>
+                          <th style={styles.tableHeader}>Role</th>
+                          <th style={styles.tableHeader}>AllowedIPs</th>
+                          <th style={styles.tableHeader}>SSH Servers</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td style={styles.tableCell}>Nhân Viên</td>
+                          <td style={styles.tableCell}>10.0.0.0/24</td>
+                          <td style={styles.tableCell}>10.0.0.50</td>
+                        </tr>
+                        <tr>
+                          <td style={styles.tableCell}>Quản Lý</td>
+                          <td style={styles.tableCell}>10.0.0.0/16, 10.1.0.0/16</td>
+                          <td style={styles.tableCell}>10.0.0.50, 10.1.0.50</td>
+                        </tr>
+                        <tr>
+                          <td style={styles.tableCell}>Giám Đốc</td>
+                          <td style={styles.tableCell}>10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16</td>
+                          <td style={styles.tableCell}>10.0.0.50, 10.1.0.50, 172.16.0.50</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
                   <button onClick={handleGetWireGuardConfig} style={styles.generateBtn}>
-                    📥 GENERATE WIREGUARD CONFIG
+                    GENERATE WIREGUARD CONFIG
                   </button>
 
                   <div style={styles.helpBox}>
-                    <strong>ℹ️ What happens next?</strong>
+                    <strong>What happens next?</strong>
                     <p style={{fontSize: '14px', marginTop: '8px', lineHeight: '1.6'}}>
                       1. Click button to generate your encrypted VPN config<br/>
                       2. Download the .conf file<br/>
@@ -193,21 +223,20 @@ function VPNDashboard() {
                     </p>
                   </div>
                 </div>
-              ) : (
                 <div>
                   <div style={styles.successBox}>
-                    <strong>✅ Configuration Generated Successfully!</strong>
+                    <strong>Configuration Generated Successfully!</strong>
                     <p style={styles.successText}>
-                      📄 Encrypted config ready | 🔐 ChaCha20 | ⏱️ Valid for 24 hours
+                      Encrypted config ready | ChaCha20 | Valid for 24 hours
                     </p>
                   </div>
 
                   <button onClick={handleDownloadConfig} style={styles.downloadBtn}>
-                    💾 DOWNLOAD WIREGUARD CONFIG
+                    DOWNLOAD WIREGUARD CONFIG
                   </button>
 
                   <details style={styles.details}>
-                    <summary style={styles.summary}>📋 View Configuration</summary>
+                    <summary style={styles.summary}>View Configuration</summary>
                     <div style={styles.codeBlock}>
                       <pre style={styles.pre}>{wgConfig}</pre>
                     </div>
@@ -215,10 +244,11 @@ function VPNDashboard() {
 
                   {/* Installation Instructions */}
                   <div style={styles.instructionsBox}>
-                    <h3 style={styles.instructionsTitle}>📱 Installation Instructions</h3>
+                    <h3 style={styles.instructionsTitle}>Installation Instructions</h3>
                     
                     <div style={styles.instructionSection}>
                       <h4 style={styles.osTitle}>🪟 Windows</h4>
+                      <ol style={styles.instructiWindows</h4>
                       <ol style={styles.instructionList}>
                         <li>Download WireGuard: <a href="https://www.wireguard.com/install/" target="_blank" rel="noopener noreferrer" style={styles.link}>wireguard.com/install</a></li>
                         <li>Install and open WireGuard</li>
@@ -229,8 +259,7 @@ function VPNDashboard() {
                     </div>
 
                     <div style={styles.instructionSection}>
-                      <h4 style={styles.osTitle}>🐧 Linux</h4>
-                      <div style={styles.codeBlock}>
+                      <h4 style={styles.osTitle}>
                         <pre style={styles.pre}>{`# Install WireGuard
 sudo apt install wireguard
 
@@ -888,6 +917,26 @@ const styles = {
     display: 'grid',
     gap: '16px'
   },
+  accessTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    marginTop: '12px'
+  },
+  tableHeader: {
+    background: '#2d3748',
+    color: 'white',
+    padding: '12px',
+    textAlign: 'left',
+    fontWeight: '600',
+    fontSize: '14px'
+  },
+  tableCell: {
+    padding: '12px',
+    borderBottom: '1px solid #e2e8f0',
+    fontSize: '13px',
+    color: '#4a5568'
+  }
+};
   layer: {
     display: 'flex',
     gap: '16px',

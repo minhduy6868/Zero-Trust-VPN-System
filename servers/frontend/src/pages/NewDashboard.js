@@ -167,7 +167,7 @@ function NewDashboard() {
                     <tr><td style={{ padding: '8px 0', color: '#666', width: '40%' }}>Name</td><td style={{ fontWeight: '600' }}>{profile?.name}</td></tr>
                     <tr><td style={{ padding: '8px 0', color: '#666' }}>Email</td><td>{profile?.email}</td></tr>
                     <tr><td style={{ padding: '8px 0', color: '#666' }}>Department</td><td>{profile?.department || 'Engineering'}</td></tr>
-                    <tr><td style={{ padding: '8px 0', color: '#666' }}>Role</td><td>{permissions?.role?.display_name || 'User'}</td></tr>
+                    <tr><td style={{ padding: '8px 0', color: '#666' }}>Role</td><td>{profile?.role_display || permissions?.role?.display_name || 'User'}</td></tr>
                   </tbody>
                 </table>
               </div>
