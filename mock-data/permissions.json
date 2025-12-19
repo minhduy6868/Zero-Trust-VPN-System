@@ -278,5 +278,10 @@
       }
     ]
   },
+  "user_role_mapping": {
+    "duy1@gmail.com": "nhan_vien",
+    "tham1@gmail.com": "quan_ly",
+    "zerotrust@gmail.com": "giam_doc"
+  },
   "default_role": "nhan_vien"
 }

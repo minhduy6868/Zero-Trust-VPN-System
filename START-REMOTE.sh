@@ -37,10 +37,22 @@ if ! command -v ngrok &> /dev/null; then
     exit 1
 fi
 
-nohup ngrok http 3000 > /tmp/ngrok.log 2>&1 &
-sleep 8
+# Start ngrok in background
+nohup ngrok http 3000 --log=stdout > /tmp/ngrok.log 2>&1 &
+NGROK_PID=$!
+echo "   Ngrok PID: $NGROK_PID"
+sleep 5
 
-NGROK_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"https://[^"]*' | head -1 | cut -d'"' -f4)
+# Try to get ngrok URL with retries
+NGROK_URL=""
+for i in {1..5}; do
+    echo "   Attempt $i/5 to get Ngrok URL..."
+    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"https://[^"]*' | head -1 | cut -d'"' -f4)
+    if [ -n "$NGROK_URL" ]; then
+        break
+    fi
+    sleep 2
+done
 
 # Show status
 echo ""
@@ -54,14 +66,22 @@ echo "╚═══════════════════════�
 echo ""
 
 if [ -n "$NGROK_URL" ]; then
-    echo "🌍 PUBLIC ACCESS:"
-    echo "   $NGROK_URL"
+    echo "🌍 PUBLIC ACCESS (Share this link):"
     echo ""
-    echo "🏠 LAN ACCESS:"
+    echo "   🔗 $NGROK_URL"
+    echo ""
+    echo "   ⚠️  First-time visitors will see Ngrok warning page"
+    echo "       Click 'Visit Site' to continue"
+    echo ""
+    echo "🏠 LAN ACCESS (Local network only):"
     echo "   http://$SERVER_IP:3000"
+    echo ""
+    echo "🔍 Ngrok Dashboard (Monitor traffic):"
+    echo "   http://localhost:4040"
 else
-    echo "⚠️  Ngrok tunnel not ready yet"
-    echo "   Check: http://localhost:4040"
+    echo "⚠️  Ngrok tunnel failed to start!"
+    echo "   Check logs: tail -f /tmp/ngrok.log"
+    echo "   Or check: http://localhost:4040"
     echo ""
     echo "🏠 LAN ACCESS:"
     echo "   http://$SERVER_IP:3000"
@@ -73,4 +93,8 @@ echo "   Email:    zerotrust@gmail.com"
 echo "   Password: password123"
 echo ""
 echo "💡 Keep this terminal open to maintain Ngrok tunnel!"
+echo "   To stop: Ctrl+C or run: pkill -f ngrok"
+echo ""
+echo "📝 Note: Ngrok free URLs expire after ~2 hours of inactivity"
+echo "         Restart script to get a new URL if needed"
 echo ""

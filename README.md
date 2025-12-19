@@ -1455,6 +1455,188 @@ docker compose down -v
 bash DEPLOY.sh
 ```
 
+### Scenario 5: Check hệ thống có hoạt động không
+```bash
+# Kiểm tra tất cả services
+docker compose ps
+
+# Kiểm tra health của từng service
+curl http://localhost:3000              # Frontend (HTML response)
+curl http://localhost:5000/api/health   # Backend (JSON: {"status": "healthy"})
+curl http://localhost:8080              # Keycloak (HTML response)
+
+# Kiểm tra Vault
+docker compose exec vault vault status  # Should show: Sealed: false
+```
+
+### Scenario 6: Đọc logs khi có lỗi
+```bash
+# Xem logs tất cả services (real-time)
+docker compose logs -f
+
+# Xem logs từng service cụ thể
+docker compose logs -f frontend         # React + Nginx logs
+docker compose logs -f backend          # Flask API logs
+docker compose logs -f keycloak         # Authentication logs
+docker compose logs -f vault            # Secrets management logs
+
+# Xem 50 dòng logs cuối
+docker compose logs --tail=50 backend
+
+# Tìm lỗi cụ thể trong logs
+docker compose logs backend | grep -i error
+docker compose logs backend | grep -i exception
+docker compose logs keycloak | grep -i "401"
+```
+
+### Scenario 7: Debug khi login bị lỗi
+```bash
+# 1. Check Keycloak có chạy không
+docker compose ps keycloak
+docker compose logs keycloak --tail=30
+
+# 2. Test Keycloak API
+curl http://localhost:8080/auth/realms/zerotrust/.well-known/openid-configuration
+
+# 3. Xem backend có connect được Keycloak không
+docker compose logs backend | grep -i keycloak
+
+# 4. Reset và init lại Keycloak
+bash scripts/init-keycloak.sh
+```
+
+### Scenario 8: Debug khi VPN config download lỗi
+```bash
+# 1. Check Vault status
+docker compose exec vault vault status
+
+# 2. Xem logs Vault
+docker compose logs vault --tail=50
+
+# 3. Xem backend có gọi Vault không
+docker compose logs backend | grep -i vault
+
+# 4. Test backend endpoint trực tiếp
+TOKEN="your-jwt-token-here"
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5000/api/user/permissions
+
+# 5. Reset và init lại Vault
+bash scripts/init-vault.sh
+docker compose restart backend
+```
+
+### Scenario 9: Check network connectivity giữa các containers
+```bash
+# Ping từ frontend tới backend
+docker compose exec frontend ping zt-backend
+
+# Ping từ backend tới vault
+docker compose exec backend ping vault
+
+# Ping từ backend tới keycloak
+docker compose exec backend ping zt-keycloak
+
+# Xem network configuration
+docker network inspect zero-trust-vpn-system_zt-net
+```
+
+### Scenario 10: Monitor resource usage
+```bash
+# Xem CPU, RAM usage của containers
+docker stats
+
+# Xem disk usage
+docker system df
+
+# Xem container details
+docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+```
+
+### Scenario 11: Reset toàn bộ hệ thống (nuclear option)
+```bash
+# Stop tất cả containers
+docker compose down -v
+
+# Xóa images (optional, nếu muốn build lại từ đầu)
+docker rmi zero-trust-vpn-system-frontend
+docker rmi zero-trust-vpn-system-backend
+
+# Xóa networks và volumes orphan
+docker network prune -f
+docker volume prune -f
+
+# Build và start lại
+bash START-LOCAL.sh
+```
+
+### Scenario 12: Check ports đang được sử dụng
+```bash
+# Xem tất cả ports đang listen
+sudo netstat -tulpn | grep LISTEN
+
+# Check specific ports của hệ thống
+sudo netstat -tulpn | grep -E "3000|5000|8080|8200|6379|5432|51820"
+
+# Nếu port bị conflict, tìm process đang chiếm
+sudo lsof -i :3000
+sudo lsof -i :5000
+
+# Kill process đang chiếm port (nếu cần)
+sudo kill -9 <PID>
+```
+
+### Scenario 13: Backup và restore data
+```bash
+# Backup PostgreSQL (Keycloak data)
+docker compose exec postgres pg_dump -U keycloak keycloak > backup-keycloak-$(date +%Y%m%d).sql
+
+# Restore PostgreSQL
+docker compose exec -T postgres psql -U keycloak keycloak < backup-keycloak-20251219.sql
+
+# Backup Vault data (chỉ trong dev mode)
+docker compose exec vault vault kv list secret/ > vault-keys-backup.txt
+
+# Backup user permissions
+cp mock-data/permissions.json permissions-backup-$(date +%Y%m%d).json
+```
+
+### Scenario 14: Test từng component riêng lẻ
+```bash
+# Test Redis
+docker compose exec redis redis-cli ping  # Should return: PONG
+
+# Test PostgreSQL
+docker compose exec postgres pg_isready -U keycloak  # Should return: accepting connections
+
+# Test Vault API
+curl http://localhost:8200/v1/sys/health
+
+# Test backend health
+curl http://localhost:5000/api/health
+
+# Test frontend serving
+curl -I http://localhost:3000  # Should return: HTTP/1.1 200 OK
+```
+
+### Scenario 15: Debug browser issues
+```bash
+# Clear cache và cookies
+# Chrome: Ctrl+Shift+Delete
+# Firefox: Ctrl+Shift+Delete
+
+# Mở DevTools Console (F12) để xem errors
+# Check tab: Console, Network, Application
+
+# Test API từ browser console
+fetch('http://localhost:5000/api/health')
+  .then(r => r.json())
+  .then(console.log)
+
+# Check localStorage
+console.log(localStorage.getItem('token'))
+console.log(localStorage.getItem('mfa_token'))
+```
+
 ---
 
 ## ⚠️ Important Notes
@@ -1464,6 +1646,9 @@ bash DEPLOY.sh
 - **Daily runs:** Takes 20-30 seconds
 - **Keep terminal open:** When using remote mode
 - **Port conflicts:** Check with `netstat` if services fail
+- **Logs location:** Use `docker compose logs` to view all logs
+- **Health checks:** All services have health endpoints for monitoring
+- **Data persistence:** Volumes are used for PostgreSQL, Vault, Redis data
 
 ---
 

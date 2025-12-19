@@ -375,9 +375,13 @@ def _get_wireguard_config_impl(username, mfa_token=None):
     # In production, always verify MFA
     if mfa_token:
         stored_mfa_token = redis_client.get(f"mfa_verified:{username}")
+        if stored_mfa_token:
+            # Redis returns bytes, decode to string
+            stored_mfa_token = stored_mfa_token.decode('utf-8') if isinstance(stored_mfa_token, bytes) else stored_mfa_token
+        
         if not stored_mfa_token or stored_mfa_token != mfa_token:
             log_access(username, "wireguard_config", "failed", "MFA not verified")
-            return None, 403
+            return {"error": "MFA verification required. Please login again."}, 403
     
     logger.info(f"Fetching WireGuard config for user: {username}")
     
@@ -507,19 +511,28 @@ def get_permissions():
     try:
         username = request.user_info.get('preferred_username', request.user_info.get('email'))
         
+        logger.info(f"Getting permissions for user: {username}")
+        
         # Load permissions data
-        with open('/app/mock-data/permissions.json', 'r') as f:
+        with open('/app/mock-data/permissions.json', 'r', encoding='utf-8') as f:
             permissions_data = json.load(f)
         
         # Get user's role
-        user_role = permissions_data['user_role_mapping'].get(username, 'employee')
-        role_permissions = permissions_data['roles'].get(user_role, {})
-        all_resources = permissions_data['resources']
+        user_role_mapping = permissions_data.get('user_role_mapping', {})
+        user_role = user_role_mapping.get(username, permissions_data.get('default_role', 'nhan_vien'))
+        
+        logger.info(f"User {username} has role: {user_role}")
+        
+        role_permissions = permissions_data['roles'].get(user_role, permissions_data['roles']['nhan_vien'])
+        all_resources = permissions_data.get('resources', {})
         
         # Determine VPN and company access based on role
-        vpn_enabled = role_permissions.get('vpn_access') in ['basic', 'full', 'priority']
+        vpn_access_level = role_permissions.get('vpn_access', 'none')
+        vpn_enabled = vpn_access_level in ['basic', 'full', 'priority']
         company_access = user_role in ['quan_ly', 'giam_doc']  # Manager and above
         totp_enabled = redis_client.get(f"totp_setup_completed:{username}")
+        
+        logger.info(f"VPN enabled: {vpn_enabled}, Company access: {company_access}")
         
         # Get user's VPN IP (from mock data if available)
         vpn_ip = None
